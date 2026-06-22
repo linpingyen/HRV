@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>rPPG 臨床級自律神經落點分析儀</title>
     <style>
-        body { font-family: monospace; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Microsoft JhengHei", sans-serif; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
         h2 { font-size: 1.1rem; margin: 5px 0; text-transform: uppercase; letter-spacing: 1px; }
         
         /* 緊湊比例 */
@@ -46,39 +46,33 @@
     <div id="status">系統就緒</div>
     <button id="startBtn">啟動臨床自律神經落點分析</button>
 
-    <!-- 框框 1 -->
     <div class="box" id="video-container">
         <h3>[1] 請對準臉部特定區域不要移動</h3>
         <video id="testVideo" autoplay playsinline muted></video>
         <canvas id="overlayCanvas"></canvas>
     </div>
 
-    <!-- 框框 2 -->
     <div class="box">
         <h3>[2] rPPG Waveform</h3>
         <canvas id="waveCanvas" class="chart"></canvas>
     </div>
 
-    <!-- 框框 3 -->
     <div class="box">
         <h3>[3] R-R Full Trend (1 to 500 Beats)</h3>
         <canvas id="rrCanvas" class="chart"></canvas>
     </div>
     
-    <!-- 擷取個數與 RR 顯示文字（位於RR趨勢圖正下方） -->
     <div class="data-panel">
         Progress: <span id="countVal">0</span>/500 | 
         Latest R-R: <span id="rrVal">--</span> ms
         <span id="noiseTxt"></span>
     </div>
 
-    <!-- 框框 4：Inverted-U 曲線常模對照圖 -->
     <div class="box-large">
         <h3>[4] Inverted-U Health Spectrum Mapping</h3>
         <canvas id="uCanvas" class="chart"></canvas>
     </div>
 
-    <!-- 📊 HRV 臨床報告面板 -->
     <div id="reportPanel">
         <h4>📊 HRV AUTONOMIC REPORT</h4>
         
@@ -154,8 +148,16 @@
         const hiddenCanvas = document.createElement('canvas');
         const hiddenCtx = hiddenCanvas.getContext('2d');
 
+        // 🛠️ 新增高解析度適配函數 (防止 Retina/手機高DPR螢幕字體模糊)
+        function setupHighDPI(canvas, ctx, logicalWidth, logicalHeight) {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = logicalWidth * dpr;
+            canvas.height = logicalHeight * dpr;
+            ctx.scale(dpr, dpr);
+        }
+
         window.addEventListener('load', () => {
-            uCanvas.width = 400; uCanvas.height = 210;
+            setupHighDPI(uCanvas, uCtx, 360, 210); // 將基礎邏輯寬度設為 360 與外框一致
             drawStaticInvertedU(null, null);
         });
 
@@ -194,8 +196,10 @@
                 overlayCanvas.height = video.videoHeight;
                 hiddenCanvas.width = video.videoWidth;
                 hiddenCanvas.height = video.videoHeight;
-                waveCanvas.width = 400;  waveCanvas.height = 125;
-                rrCanvas.width = 800;    rrCanvas.height = 125;
+                
+                // 所有 Chart 同步做高解析度適配
+                setupHighDPI(waveCanvas, waveCtx, 360, 125);
+                setupHighDPI(rrCanvas, rrCtx, 360, 125);
             }
 
             if (overlayCanvas.width > 0) {
@@ -246,21 +250,23 @@
         }
 
         function drawWaveform() {
-            waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+            // 在高解析度運算下，使用內部邏輯寬高 360x125
+            const w = 360; const h = 125;
+            waveCtx.clearRect(0, 0, w, h);
             if (greenHistory.length < 2) return;
             const min = Math.min(...greenHistory); const max = Math.max(...greenHistory); const range = (max - min) || 1;
             
             waveCtx.beginPath(); waveCtx.strokeStyle = '#00ff66'; waveCtx.lineWidth = 2;
             for (let i = 0; i < greenHistory.length; i++) {
-                const x = (i / (maxWavePoints - 1)) * waveCanvas.width;
-                const y = waveCanvas.height - ((greenHistory[i] - min) / range) * waveCanvas.height;
+                const x = (i / (maxWavePoints - 1)) * w;
+                const y = h - ((greenHistory[i] - min) / range) * h;
                 if (i === 0) waveCtx.moveTo(x, y); else waveCtx.lineTo(x, y);
             }
             waveCtx.stroke();
 
             if (lastPeakIndexInHistory !== -1 && lastPeakIndexInHistory < greenHistory.length) {
-                const peakX = (lastPeakIndexInHistory / (maxWavePoints - 1)) * waveCanvas.width;
-                const peakY = waveCanvas.height - ((greenHistory[lastPeakIndexInHistory] - min) / range) * waveCanvas.height;
+                const peakX = (lastPeakIndexInHistory / (maxWavePoints - 1)) * w;
+                const peakY = h - ((greenHistory[lastPeakIndexInHistory] - min) / range) * h;
                 
                 waveCtx.beginPath();
                 waveCtx.strokeStyle = '#ff4757'; 
@@ -296,66 +302,84 @@
         }
 
         function drawRRChart() {
-            rrCtx.clearRect(0, 0, rrCanvas.width, rrCanvas.height);
+            const w = 360; const h = 125;
+            rrCtx.clearRect(0, 0, w, h);
             if (rrHistory.length < 2) return;
             const currentMin = Math.min(...rrHistory); const currentMax = Math.max(...rrHistory); const yRange = (currentMax - currentMin) || 1;
             rrCtx.beginPath(); rrCtx.strokeStyle = '#00ffff'; rrCtx.lineWidth = 1.2; 
             for (let i = 0; i < rrHistory.length; i++) {
-                const x = (i / (totalTargetBeats - 1)) * rrCanvas.width;
-                const y = rrCanvas.height - ((rrHistory[i] - currentMin) / yRange) * rrCanvas.height;
+                const x = (i / (totalTargetBeats - 1)) * w;
+                const y = h - ((rrHistory[i] - currentMin) / yRange) * h;
                 if (i === 0) rrCtx.moveTo(x, y); else rrCtx.lineTo(x, y);
             }
             rrCtx.stroke();
         }
 
-        // 🎨 修正處：將畫布中的學術標籤轉換成好懂的「風險族群提示文字」並微調排版
+        // 🎨 徹底優化中文字型與解析度排版（邏輯寬度為 360，高度為 210）
         function drawStaticInvertedU(myAE, myEoE) {
-            uCtx.clearRect(0, 0, uCanvas.width, uCanvas.height);
+            const w = 360; const h = 210;
+            uCtx.clearRect(0, 0, w, h);
+            
+            // 繪製軸線
             uCtx.strokeStyle = '#555'; uCtx.lineWidth = 1.5;
-            uCtx.beginPath(); uCtx.moveTo(40, 10); uCtx.lineTo(40, 180); uCtx.lineTo(380, 180); uCtx.stroke();
-            uCtx.fillStyle = '#888'; uCtx.font = '10px monospace';
-            uCtx.fillText("EoE (Complexity)", 45, 18); uCtx.fillText("AE (Disorder)", 300, 175);
-            uCtx.fillText("0.0", 35, 192); uCtx.fillText("1.0", 370, 192);
+            uCtx.beginPath(); 
+            uCtx.moveTo(35, 15); 
+            uCtx.lineTo(35, 175); 
+            uCtx.lineTo(345, 175); 
+            uCtx.stroke();
+            
+            // 坐標軸文字提示 - 換上系統高清晰平滑字型
+            uCtx.fillStyle = '#999'; 
+            uCtx.font = '11px sans-serif';
+            uCtx.fillText("EoE (複雜度)", 42, 23); 
+            uCtx.fillText("AE (混亂度)", 275, 168);
+            uCtx.fillText("0.0", 30, 188); 
+            uCtx.fillText("1.0", 335, 188);
 
-            uCtx.strokeStyle = 'rgba(0, 255, 102, 0.4)'; uCtx.lineWidth = 3;
+            // 繪製交大倒 U 字形常模拋物線
+            uCtx.strokeStyle = 'rgba(0, 255, 102, 0.45)'; uCtx.lineWidth = 3;
             uCtx.beginPath();
-            for (let xPixel = 40; xPixel <= 380; xPixel++) {
-                let aeVal = (xPixel - 40) / 340;
+            for (let xPixel = 35; xPixel <= 345; xPixel++) {
+                let aeVal = (xPixel - 35) / 310;
                 let eoeVal = 1.2 * (1 - Math.pow((aeVal - 0.5) / 0.5, 2));
                 if (eoeVal < 0) eoeVal = 0;
-                let yPixel = 180 - (eoeVal / 1.5) * 160;
-                if (xPixel === 40) uCtx.moveTo(xPixel, yPixel); else uCtx.lineTo(xPixel, yPixel);
+                let yPixel = 175 - (eoeVal / 1.5) * 150;
+                if (xPixel === 35) uCtx.moveTo(xPixel, yPixel); else uCtx.lineTo(xPixel, yPixel);
             }
             uCtx.stroke();
 
-            // 左側：心肌缺血風險族群 (原 CHF)
-            uCtx.fillStyle = 'rgba(255, 71, 87, 0.2)'; uCtx.beginPath(); uCtx.arc(80, 150, 22, 0, 2*Math.PI); uCtx.fill();
-            uCtx.fillStyle = '#ff4757'; uCtx.font = '9px monospace'; // 稍微縮小字體讓中文排版更好看
-            uCtx.fillText("心肌缺血", 62, 148);
-            uCtx.fillText("風險族群", 62, 158);
+            // 左側：心肌缺血風險族群
+            uCtx.fillStyle = 'rgba(255, 71, 87, 0.2)'; uCtx.beginPath(); uCtx.arc(75, 145, 24, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = '#ff4757'; uCtx.font = 'bold 10px sans-serif'; uCtx.textAlign = "center";
+            uCtx.fillText("心肌缺血", 75, 142);
+            uCtx.fillText("風險族群", 75, 154);
 
             // 中間：健康對照組
-            uCtx.fillStyle = 'rgba(0, 255, 102, 0.15)'; uCtx.beginPath(); uCtx.arc(210, 65, 32, 0, 2*Math.PI); uCtx.fill();
-            uCtx.fillStyle = '#00ff66'; uCtx.font = '10px monospace';
-            uCtx.fillText("健康對照組", 182, 68);
+            uCtx.fillStyle = 'rgba(0, 255, 102, 0.15)'; uCtx.beginPath(); uCtx.arc(190, 65, 32, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = '#00ff66'; uCtx.font = 'bold 11px sans-serif';
+            uCtx.fillText("健康對照組", 190, 68);
 
-            // 右側：心律不整風險族群 (原 AF)
-            uCtx.fillStyle = 'rgba(255, 165, 2, 0.2)'; uCtx.beginPath(); uCtx.arc(330, 150, 22, 0, 2*Math.PI); uCtx.fill();
-            uCtx.fillStyle = '#ffa502'; uCtx.font = '9px monospace';
-            uCtx.fillText("心律不整", 312, 148);
-            uCtx.fillText("風險族群", 312, 158);
+            // 右側：心律不整風險族群
+            uCtx.fillStyle = 'rgba(255, 165, 2, 0.2)'; uCtx.beginPath(); uCtx.arc(305, 145, 24, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = '#ffa502'; uCtx.font = 'bold 10px sans-serif';
+            uCtx.fillText("心律不整", 305, 142);
+            uCtx.fillText("風險族群", 305, 154);
 
+            // 恢復預設對齊（防止影響落點標籤）
+            uCtx.textAlign = "left";
+
+            // 繪製您的星號落點
             if (myAE !== null && myEoE !== null) {
                 let boundedAE = Math.max(0, Math.min(1, myAE));
                 let boundedEoE = Math.max(0, Math.min(1.5, myEoE));
-                let targetX = 40 + boundedAE * 340;
-                let targetY = 180 - (boundedEoE / 1.5) * 160;
+                let targetX = 35 + boundedAE * 310;
+                let targetY = 175 - (boundedEoE / 1.5) * 150;
 
                 uCtx.strokeStyle = '#ff0033'; uCtx.lineWidth = 2;
                 uCtx.beginPath(); uCtx.moveTo(targetX - 12, targetY); uCtx.lineTo(targetX + 12, targetY);
                 uCtx.moveTo(targetX, targetY - 12); uCtx.lineTo(targetX, targetY + 12); uCtx.stroke();
                 uCtx.fillStyle = '#ffffff'; uCtx.beginPath(); uCtx.arc(targetX, targetY, 4, 0, 2*Math.PI); uCtx.fill();
-                uCtx.fillStyle = '#ffffff'; uCtx.font = 'bold 11px monospace'; uCtx.fillText("★ 您的落點", targetX + 8, targetY - 5);
+                uCtx.fillStyle = '#ffffff'; uCtx.font = 'bold 12px sans-serif'; uCtx.fillText("★ 您的落點", targetX + 8, targetY - 5);
             }
         }
 
