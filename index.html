@@ -22,7 +22,7 @@
         .data-panel { font-size: 0.85rem; color: #ffffff; margin: 8px auto; font-weight: bold; max-width: 360px; }
         .data-panel span { color: #00ffff; font-size: 1rem; }
         #countVal { color: #ff4757; }
-        #noiseTxt { color: #ffbc00; font-size: 0.75rem; display: block; height: 14px; margin-top: 1px; }
+        #noiseTxt { color: #ffbc00; font-size: 0.82rem; display: block; height: 16px; margin-top: 3px; font-weight: bold; }
 
         button { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 8px 0; }
         #status { color: #ffa502; font-size: 0.85rem; margin: 5px; min-height: 20px; }
@@ -164,6 +164,7 @@
                 lastPeakTime = 0;
                 isRunning = true;
                 status.innerText = "正在精密記錄 500 下心搏...";
+                noiseTxt.innerText = "";
                 drawStaticInvertedU(null, null); 
                 requestAnimationFrame(processLoop);
             } catch (err) {
@@ -243,12 +244,11 @@
             if (len < 11) return;
             
             const now = performance.now();
-            const correctedTime = now - (5 * 33); // 估算 5 幀前的物理時間點
             
-            // 💡 【臨床鐵律防線：不反應期鎖】
-            // 如果當前時間距離上一次成功抓取的時間小於 450 毫秒，代表還在前一次心跳的重搏干擾區內。
-            // 此時不進行任何重疊偵測，徹底杜絕多重觸發、心率飆升到 1.5 倍以上的問題！
-            if (lastPeakTime !== 0 && (correctedTime - lastPeakTime) < 450) {
+            // 💡 【臨床鐵律防線：不反應期生理鎖】
+            // 如果當前時間軸距離上一次成功捕捉點小於 450ms，代表絕對還在前一次心跳的雜訊與重搏波區間內。
+            // 直接排除，不再重複計算，藉此根除 1.5 倍心率與多重觸發！
+            if (lastPeakTime !== 0 && (now - lastPeakTime) < 450) {
                 return; 
             }
 
@@ -279,26 +279,29 @@
             }
             const baseNoise = totalDiff / (recent60.length - 1);
 
-            // 自適應強度門檻檢驗
+            // 自適應強度門檻檢驗（陡降幅度必須大於背景雜訊）
             if (dropAmplitude < baseNoise * 1.5 || dropAmplitude < 0.04) return;
             if (riseAmplitude < 0.01) return; 
 
             if (lastPeakTime !== 0) {
-                const rrInterval = correctedTime - lastPeakTime;
+                const rrInterval = now - lastPeakTime;
                 
-                // 進入乾淨的生理正常區間 (此時必定大於 450ms)
-                if (rrInterval >= 450 && rrInterval <= 1600) {
+                // 💡 【即時過濾與警告邏輯】
+                if (rrInterval >= 300 && rrInterval <= 1600) {
+                    // 在安全論文範圍內，存入歷史紀錄
                     rrHistory.push(rrInterval);
-                    
                     rrValDisplay.innerText = Math.round(rrInterval);
                     countValDisplay.innerText = rrHistory.length;
-                    noiseTxt.innerText = "";
+                    noiseTxt.innerText = ""; // 清空警告
                     
-                    peakIndices.push(len - 6);
-                    lastPeakTime = correctedTime;
+                    peakIndices.push(len - 6); // 標記紅點
+                    lastPeakTime = now;
+                } else {
+                    // ⚠️ 超出 300 ~ 1600ms 生理範圍，跳出即時黃字警告，且不計入 500 次心搏
+                    noiseTxt.innerText = `⚠️ [生理訊號異常] R-R 範圍錯誤：${Math.round(rrInterval)} ms (已被程式安全隔離)`;
                 }
             } else {
-                lastPeakTime = correctedTime;
+                lastPeakTime = now;
             }
         }
 
@@ -443,6 +446,7 @@
         }
 
         function calculateHRVMetrics() {
+            // 所有計入 rrHistory 的在偵測當下已確定是 300~1600ms，此處再次過濾確保萬無一失
             const filteredRR = rrHistory.filter(val => val >= 300 && val <= 1600);
             const N = filteredRR.length;
             
