@@ -220,7 +220,6 @@
                         greenHistory.shift();
                     }
                     
-                    // 🛠️ 執行基於生理特徵（60-120ms左側高峰陡降）的精準抓取演算法
                     detectCardiacPhysioValley();
                 }
                 drawWaveform();
@@ -239,34 +238,40 @@
             requestAnimationFrame(processLoop);
         }
 
-        // 🛠️ 基於「吸收前高波峰到波谷急降特徵」的臨床級滑動窗演算法
         function detectCardiacPhysioValley() {
             const len = greenHistory.length;
-            // 窗大小設為 11 幀（涵蓋約 360ms 內的 前峰-谷-後峰 生理區間）
             if (len < 11) return;
             
+            const now = performance.now();
+            const correctedTime = now - (5 * 33); // 估算 5 幀前的物理時間點
+            
+            // 💡 【臨床鐵律防線：不反應期鎖】
+            // 如果當前時間距離上一次成功抓取的時間小於 450 毫秒，代表還在前一次心跳的重搏干擾區內。
+            // 此時不進行任何重疊偵測，徹底杜絕多重觸發、心率飆升到 1.5 倍以上的問題！
+            if (lastPeakTime !== 0 && (correctedTime - lastPeakTime) < 450) {
+                return; 
+            }
+
             const windowPoints = greenHistory.slice(-11);
-            const valleyIdxInWindow = 5; // 定位正中間（第 5 幀，約 165ms 前）
+            const valleyIdxInWindow = 5; 
             const valleyValue = windowPoints[valleyIdxInWindow];
             
-            // 特徵 1：這點必須是這 11 幀滑動窗內的絕對最小值（波谷確認）
+            // 特徵 1：滑動窗內絕對波谷
             const minInWindow = Math.min(...windowPoints);
             if (valleyValue !== minInWindow) return;
 
-            // 特徵 2：尋找左側（吸收前 60~120ms，即 2~4 幀前）的最高隆起波峰
-            // 檢視 valleyIdxInWindow 左側鄰近的點
+            // 特徵 2：回溯左側（吸收前 60~120ms）的高峰
             const leftSegment = windowPoints.slice(1, valleyIdxInWindow); 
             const leftPeak = Math.max(...leftSegment);
             
-            // 特徵 3：尋找右側（吸收後 150~250ms）的舒張期回彈波峰
+            // 特徵 3：回溯右側（吸收後 150~250ms）的回彈波峰
             const rightSegment = windowPoints.slice(valleyIdxInWindow + 1, 10);
             const rightPeak = Math.max(...rightSegment);
 
-            // 計算左側陡降振幅與右側回升振幅
             const dropAmplitude = leftPeak - valleyValue;
             const riseAmplitude = rightPeak - valleyValue;
 
-            // 實時計算最近 2 秒（60幀）的環境微幅背景雜訊平均相鄰差
+            // 計算最近 2 秒的背景環境波動雜訊
             let totalDiff = 0;
             const recent60 = greenHistory.slice(-60);
             for(let i = 1; i < recent60.length; i++) {
@@ -274,29 +279,22 @@
             }
             const baseNoise = totalDiff / (recent60.length - 1);
 
-            // 自適應防線：左側陡降幅度必須明顯大於雜訊抖動（通常至少大於背景波動 1.5 倍且有實質落差）
-            // 這能確保不論自動調光把波形放大還是縮小，此比例都絕對穩健
+            // 自適應強度門檻檢驗
             if (dropAmplitude < baseNoise * 1.5 || dropAmplitude < 0.04) return;
-            if (riseAmplitude < 0.01) return; // 右側至少要有回彈趨勢
+            if (riseAmplitude < 0.01) return; 
 
-            const now = performance.now();
-            // 因為波谷點在 5 幀前，精確往補回 5 幀的時間（5 * 33ms = 165ms）
-            const correctedTime = now - (5 * 33); 
-            
             if (lastPeakTime !== 0) {
                 const rrInterval = correctedTime - lastPeakTime;
                 
-                // 生理安全範圍鎖 (40 ~ 180 BPM)
-                if (rrInterval >= 335 && rrInterval <= 1500) {
+                // 進入乾淨的生理正常區間 (此時必定大於 450ms)
+                if (rrInterval >= 450 && rrInterval <= 1600) {
                     rrHistory.push(rrInterval);
                     
                     rrValDisplay.innerText = Math.round(rrInterval);
                     countValDisplay.innerText = rrHistory.length;
                     noiseTxt.innerText = "";
                     
-                    // 紅點精準標記在 5 幀前的波谷正中心，並隨 greenHistory 的滾動平滑移出
                     peakIndices.push(len - 6);
-                    
                     lastPeakTime = correctedTime;
                 }
             } else {
@@ -410,14 +408,15 @@
             }
         }
 
-        function calculateAE_EoE() {
-            const N = rrHistory.length;
+        function calculateAE_EoE(filteredRR) {
+            const N = filteredRR.length;
             if (N < 100) return { ae: 0, eoe: 0 };
+            
             const xMin = 300; const xMax = 1600; const s1 = 18; const sliceWidth = (xMax - xMin) / s1;
             const tau = 3; const numSubseries = Math.floor(N / tau);
             let y_tau = [];
             for (let j = 0; j < numSubseries; j++) {
-                const subPoints = rrHistory.slice(j * tau, (j + 1) * tau);
+                const subPoints = filteredRR.slice(j * tau, (j + 1) * tau);
                 let counts = new Array(s1).fill(0);
                 subPoints.forEach(val => {
                     let idx = Math.floor((val - xMin) / sliceWidth);
@@ -444,20 +443,27 @@
         }
 
         function calculateHRVMetrics() {
-            const N = rrHistory.length;
-            const meanRR = rrHistory.reduce((a, b) => a + b, 0) / N;
-            const variance = rrHistory.reduce((sum, val) => sum + Math.pow(val - meanRR, 2), 0) / N;
+            const filteredRR = rrHistory.filter(val => val >= 300 && val <= 1600);
+            const N = filteredRR.length;
+            
+            if (N < 5) {
+                status.innerText = "過濾後乾淨樣本數不足，無法生成報告。";
+                return;
+            }
+
+            const meanRR = filteredRR.reduce((a, b) => a + b, 0) / N;
+            const variance = filteredRR.reduce((sum, val) => sum + Math.pow(val - meanRR, 2), 0) / N;
             const sdnn = Math.sqrt(variance);
             let diffSumSq = 0; let nn50Count = 0;
             for (let i = 0; i < N - 1; i++) {
-                const diff = Math.abs(rrHistory[i + 1] - rrHistory[i]); diffSumSq += Math.pow(diff, 2); if (diff > 50) nn50Count++;
+                const diff = Math.abs(filteredRR[i + 1] - filteredRR[i]); diffSumSq += Math.pow(diff, 2); if (diff > 50) nn50Count++;
             }
             const rmssd = Math.sqrt(diffSumSq / (N - 1)); const pnn50 = (nn50Count / (N - 1)) * 100;
             const estimatedHF = Math.pow(rmssd, 2) * 0.5; const totalPower = Math.pow(sdnn, 2) * 0.8;
             let estimatedLF = totalPower - estimatedHF; if (estimatedLF < estimatedHF * 0.5) estimatedLF = estimatedHF * 1.5; 
             const lfhfRatio = estimatedLF / estimatedHF;
 
-            const entropyMetrics = calculateAE_EoE();
+            const entropyMetrics = calculateAE_EoE(filteredRR);
 
             document.getElementById('v_sdnn').innerText = sdnn.toFixed(1);
             document.getElementById('v_rmssd').innerText = rmssd.toFixed(1);
