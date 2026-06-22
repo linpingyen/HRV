@@ -220,8 +220,8 @@
                         greenHistory.shift();
                     }
                     
-                    // 🛠️ 執行「基於波峰/波谷差值門檻」的改良版偵測
-                    detectValleyWithAmplitudeThreshold();
+                    // 🛠️ 執行基於生理特徵（60-120ms左側高峰陡降）的精準抓取演算法
+                    detectCardiacPhysioValley();
                 }
                 drawWaveform();
                 drawRRChart();
@@ -239,47 +239,54 @@
             requestAnimationFrame(processLoop);
         }
 
-        // 🛠️ 您的極佳創意改良實作：局部波谷與其前後波峰的動態差值門檻法
-        function detectValleyWithAmplitudeThreshold() {
+        // 🛠️ 基於「吸收前高波峰到波谷急降特徵」的臨床級滑動窗演算法
+        function detectCardiacPhysioValley() {
             const len = greenHistory.length;
-            // 滑動窗大小設為 9 幀，確保能看清波谷左右兩側
-            if (len < 9) return;
+            // 窗大小設為 11 幀（涵蓋約 360ms 內的 前峰-谷-後峰 生理區間）
+            if (len < 11) return;
             
-            const last9Points = greenHistory.slice(-9);
-            const centerIdxInWindow = 4; // 正中間那一幀的索引
-            const centerValue = last9Points[centerIdxInWindow];
+            const windowPoints = greenHistory.slice(-11);
+            const valleyIdxInWindow = 5; // 定位正中間（第 5 幀，約 165ms 前）
+            const valleyValue = windowPoints[valleyIdxInWindow];
             
-            // 1. 基礎 V 字谷檢查：中間這點必須小於它左右相鄰的點 (它是滑動窗內局部最小值)
-            const minInWindow = Math.min(...last9Points);
-            if (centerValue !== minInWindow) return;
+            // 特徵 1：這點必須是這 11 幀滑動窗內的絕對最小值（波谷確認）
+            const minInWindow = Math.min(...windowPoints);
+            if (valleyValue !== minInWindow) return;
 
-            // 2. 尋找這個波谷「前、後」的局部波峰 (Peak)
-            const leftSegment = last9Points.slice(0, centerIdxInWindow);
-            const rightSegment = last9Points.slice(centerIdxInWindow + 1);
+            // 特徵 2：尋找左側（吸收前 60~120ms，即 2~4 幀前）的最高隆起波峰
+            // 檢視 valleyIdxInWindow 左側鄰近的點
+            const leftSegment = windowPoints.slice(1, valleyIdxInWindow); 
             const leftPeak = Math.max(...leftSegment);
+            
+            // 特徵 3：尋找右側（吸收後 150~250ms）的舒張期回彈波峰
+            const rightSegment = windowPoints.slice(valleyIdxInWindow + 1, 10);
             const rightPeak = Math.max(...rightSegment);
-            
-            // 3. 計算波峰與波谷的實時差值（取左右兩側平均差值，確保不受單邊基底飄移歪斜影響）
-            const currentAmplitude = ((leftPeak - centerValue) + (rightPeak - centerValue)) / 2;
 
-            // 4. 計算動態基準環境振幅（取最近 60 筆約 2 秒內的全域震幅作為分母門檻）
-            const recentWindow = greenHistory.slice(-60);
-            const globalMax = Math.max(...recentWindow);
-            const globalMin = Math.min(...recentWindow);
-            const globalRange = globalMax - globalMin;
-            
-            // 🔒 核心門檻判定：當前波峰波谷的差值，必須達到這兩秒總震幅的 25% 以上
-            // 這行直接落實了您說的「差值達門檻再抓取」，完美排除平坦波段的微幅抖動雜訊
-            if (currentAmplitude < globalRange * 0.25 || globalRange < 0.1) return;
+            // 計算左側陡降振幅與右側回升振幅
+            const dropAmplitude = leftPeak - valleyValue;
+            const riseAmplitude = rightPeak - valleyValue;
+
+            // 實時計算最近 2 秒（60幀）的環境微幅背景雜訊平均相鄰差
+            let totalDiff = 0;
+            const recent60 = greenHistory.slice(-60);
+            for(let i = 1; i < recent60.length; i++) {
+                totalDiff += Math.abs(recent60[i] - recent60[i-1]);
+            }
+            const baseNoise = totalDiff / (recent60.length - 1);
+
+            // 自適應防線：左側陡降幅度必須明顯大於雜訊抖動（通常至少大於背景波動 1.5 倍且有實質落差）
+            // 這能確保不論自動調光把波形放大還是縮小，此比例都絕對穩健
+            if (dropAmplitude < baseNoise * 1.5 || dropAmplitude < 0.04) return;
+            if (riseAmplitude < 0.01) return; // 右側至少要有回彈趨勢
 
             const now = performance.now();
-            // 由於正中間那點是 4 幀前的歷史資料，將時間往回修準 4 幀
-            const correctedTime = now - (4 * 33); 
+            // 因為波谷點在 5 幀前，精確往補回 5 幀的時間（5 * 33ms = 165ms）
+            const correctedTime = now - (5 * 33); 
             
             if (lastPeakTime !== 0) {
                 const rrInterval = correctedTime - lastPeakTime;
                 
-                // 🔒 生理防護安全鎖 (40 ~ 180 BPM)
+                // 生理安全範圍鎖 (40 ~ 180 BPM)
                 if (rrInterval >= 335 && rrInterval <= 1500) {
                     rrHistory.push(rrInterval);
                     
@@ -287,8 +294,8 @@
                     countValDisplay.innerText = rrHistory.length;
                     noiseTxt.innerText = "";
                     
-                    // 🛠️ 紅點精準戳在 4 幀前的波谷正中央，並隨著 greenHistory 索引 shift 平滑往左流動
-                    peakIndices.push(len - 5);
+                    // 紅點精準標記在 5 幀前的波谷正中心，並隨 greenHistory 的滾動平滑移出
+                    peakIndices.push(len - 6);
                     
                     lastPeakTime = correctedTime;
                 }
@@ -311,7 +318,6 @@
             }
             waveCtx.stroke();
 
-            // 繪製紅點標記：精準跟隨凹陷波谷移動，不會在滾動時跳掉或消失
             peakIndices.forEach(idx => {
                 if (idx >= 0 && idx < greenHistory.length) {
                     const peakX = (idx / (maxWavePoints - 1)) * w;
