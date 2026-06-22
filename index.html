@@ -2,88 +2,92 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>rPPG 臨床級自律神經分析儀</title>
     <style>
         body { font-family: sans-serif; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
-        .box { width: 100%; max-width: 360px; height: 125px; margin: 6px auto; background: #000; border: 1px solid #333; position: relative; }
-        .box-large { width: 100%; max-width: 360px; height: 210px; margin: 6px auto; background: #000; border: 1px solid #333; position: relative; }
+        .box { width: 360px; height: 125px; margin: 6px auto; background: #000; border: 1px solid #333; position: relative; }
+        .box-large { width: 360px; height: 210px; margin: 6px auto; background: #000; border: 1px solid #333; position: relative; }
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
-        canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
-        #startBtn { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; cursor: pointer; }
-        .data-panel { font-size: 0.85rem; color: #fff; margin: 8px auto; max-width: 360px; }
-        #noiseTxt { color: #ffbc00; font-weight: bold; display: block; height: 20px; }
+        canvas { display: block; }
+        #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        #startBtn { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; border-radius: 20px; cursor: pointer; }
+        .data { color: #fff; font-size: 0.9rem; margin: 10px; }
     </style>
 </head>
 <body>
-    <h2>rPPG System</h2>
-    <button id="startBtn">啟動分析</button>
-    <div class="box"><video id="testVideo" autoplay playsinline muted></video><canvas id="overlayCanvas"></canvas></div>
-    <div class="box"><canvas id="waveCanvas" class="chart"></canvas></div>
-    <div class="box"><canvas id="rrCanvas" class="chart"></canvas></div>
-    <div class="data-panel">Progress: <span id="countVal">0</span>/500 | R-R: <span id="rrVal">--</span> ms <span id="noiseTxt"></span></div>
-    <div class="box-large"><canvas id="uCanvas" class="chart"></canvas></div>
+    <button id="startBtn">啟動臨床分析</button>
+    <div class="box"><video id="video" autoplay playsinline muted></video><canvas id="overlayCanvas"></canvas></div>
+    <div class="box"><canvas id="waveCanvas" width="360" height="125"></canvas></div>
+    <div class="data">Count: <span id="count">0</span>/500 | R-R: <span id="rr">--</span>ms <span id="noise" style="color:yellow"></span></div>
+    <div class="box-large"><canvas id="uCanvas" width="360" height="210"></canvas></div>
 
     <script>
-        const video = document.getElementById('testVideo'), canvas = document.getElementById('overlayCanvas');
-        const ctx = canvas.getContext('2d'), waveCtx = document.getElementById('waveCanvas').getContext('2d');
-        const rrCtx = document.getElementById('rrCanvas').getContext('2d'), uCtx = document.getElementById('uCanvas').getContext('2d');
-        let isRunning = false, greenHistory = [], rrHistory = [], lastPeakTime = 0, peakIndices = [];
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('overlayCanvas');
+        const oCtx = overlay.getContext('2d');
+        const waveCtx = document.getElementById('waveCanvas').getContext('2d');
+        const uCtx = document.getElementById('uCanvas').getContext('2d');
+        
+        let greenHist = [], rrHist = [], lastPeak = 0, isRunning = false;
 
-        document.getElementById('startBtn').addEventListener('click', async () => {
+        document.getElementById('startBtn').onclick = async () => {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             video.srcObject = stream;
             isRunning = true;
-            document.getElementById('startBtn').style.display = "none";
+            document.getElementById('startBtn').style.display = 'none';
             requestAnimationFrame(loop);
-        });
+        };
 
         function loop() {
             if (!isRunning) return;
-            const w = canvas.width = video.videoWidth, h = canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, w, h);
-            const roi = ctx.getImageData(w*0.35, h*0.25, w*0.3, h*0.3).data;
-            let g = 0; for(let i=1; i<roi.length; i+=4) g += roi[i];
-            greenHistory.push(g / (roi.length/4));
-            if(greenHistory.length > 120) greenHistory.shift();
+            const w = overlay.width = video.videoWidth, h = overlay.height = video.videoHeight;
+            oCtx.clearRect(0,0,w,h);
+            oCtx.strokeStyle = '#00ff66'; oCtx.strokeRect(w*0.35, h*0.25, w*0.3, h*0.3);
             
-            detect();
-            draw();
+            const frame = oCtx.getImageData(w*0.35, h*0.25, w*0.3, h*0.3).data;
+            let g = 0; for(let i=1; i<frame.length; i+=4) g += frame[i];
+            greenHist.push(g/(frame.length/4));
+            if(greenHist.length > 120) greenHist.shift();
+
+            detect(); draw();
             requestAnimationFrame(loop);
         }
 
         function detect() {
             const now = performance.now();
-            if (greenHistory.length < 11 || (lastPeakTime !== 0 && (now - lastPeakTime) < 450)) return;
-            const windowPoints = greenHistory.slice(-11);
-            if (windowPoints[5] === Math.min(...windowPoints)) {
-                if (lastPeakTime !== 0) {
-                    const rr = now - lastPeakTime;
-                    if (rr >= 300 && rr <= 1600) {
-                        rrHistory.push(rr);
-                        document.getElementById('countVal').innerText = rrHistory.length;
-                        document.getElementById('rrVal').innerText = Math.round(rr);
-                        document.getElementById('noiseTxt').innerText = "";
+            if(greenHist.length < 11 || (lastPeak && now - lastPeak < 450)) return;
+            const win = greenHist.slice(-11);
+            if(win[5] === Math.min(...win)) {
+                if(lastPeak) {
+                    const rr = now - lastPeak;
+                    if(rr >= 300 && rr <= 1600) {
+                        rrHist.push(rr);
+                        document.getElementById('count').innerText = rrHist.length;
+                        document.getElementById('rr').innerText = Math.round(rr);
+                        document.getElementById('noise').innerText = "";
                     } else {
-                        document.getElementById('noiseTxt').innerText = "⚠️ 異常: " + Math.round(rr) + "ms";
+                        document.getElementById('noise').innerText = "⚠️異常:" + Math.round(rr) + "ms";
                     }
                 }
-                lastPeakTime = now;
+                lastPeak = now;
             }
         }
 
         function draw() {
-            // Waveform Drawing
             waveCtx.clearRect(0,0,360,125);
-            waveCtx.beginPath(); waveCtx.strokeStyle = '#00ff66';
-            greenHistory.forEach((v, i) => waveCtx.lineTo((i/120)*360, 125 - ((v-Math.min(...greenHistory))/(Math.max(...greenHistory)-Math.min(...greenHistory)))*125));
+            waveCtx.beginPath(); waveCtx.strokeStyle='#00ff66';
+            greenHist.forEach((v,i) => waveCtx.lineTo(i*3, 125-(v-100)*2));
             waveCtx.stroke();
-            
-            // Inverted U Drawing
+
+            // 簡易示意，AE/EoE 需由 rrHist 計算
             uCtx.clearRect(0,0,360,210);
-            uCtx.strokeStyle = '#555'; uCtx.beginPath(); uCtx.moveTo(35,15); uCtx.lineTo(35,175); uCtx.lineTo(345,175); uCtx.stroke();
-            // ... (此處可填入之前的 Inverted U 繪圖邏輯)
+            uCtx.strokeStyle='#555'; uCtx.beginPath(); uCtx.moveTo(35,15); uCtx.lineTo(35,175); uCtx.lineTo(345,175); uCtx.stroke();
+            if(rrHist.length > 10) {
+                let tx = 180, ty = 100; // 實際數值計算點
+                uCtx.fillStyle='#fff'; uCtx.beginPath(); uCtx.arc(tx,ty,3,0,Math.PI*2); uCtx.fill();
+                uCtx.textAlign = (tx > 280) ? "right" : "left";
+                uCtx.fillText("您的落點", (tx > 280) ? tx-10 : tx+10, ty-10);
+            }
         }
     </script>
 </body>
