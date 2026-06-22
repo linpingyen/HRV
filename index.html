@@ -125,14 +125,11 @@
         
         let isRunning = false;
         let greenHistory = [];
-        const maxWavePoints = 120; // 畫布固定呈現120個點
+        const maxWavePoints = 120; 
         let rrHistory = [];
         const totalTargetBeats = 500;    
         
-        // 🛠️ 滑動窗偵測器變數
         let lastPeakTime = 0;
-        
-        // 🛠️ 專門用來記錄紅點在畫布中對應 greenHistory 裡的索引值位置
         let peakIndices = [];
 
         const hiddenCanvas = document.createElement('canvas');
@@ -212,9 +209,8 @@
                 }
 
                 if (pixelCount > 0) {
-                    const avgGreen = totalGreen / pixelCount; // 保持原始綠色光學數值
+                    const avgGreen = totalGreen / pixelCount; 
                     
-                    // 當畫布滿 120 點要向左平移時，現存的紅點索引必須精準減 1，藉此實現紅點不消失且完美跟隨
                     if (greenHistory.length >= maxWavePoints) {
                         peakIndices = peakIndices.map(idx => idx - 1).filter(idx => idx >= 0);
                     }
@@ -224,8 +220,8 @@
                         greenHistory.shift();
                     }
                     
-                    // 🛠️ 執行穩健型局部滑動最小視窗判定
-                    detectValleySlidingWindow();
+                    // 🛠️ 執行「基於波峰/波谷差值門檻」的改良版偵測
+                    detectValleyWithAmplitudeThreshold();
                 }
                 drawWaveform();
                 drawRRChart();
@@ -243,47 +239,61 @@
             requestAnimationFrame(processLoop);
         }
 
-        // 🛠️ 核心優化：中心點滑動窗最小值法（完美克服相機調光與高頻微幅雜訊）
-        function detectValleySlidingWindow() {
+        // 🛠️ 您的極佳創意改良實作：局部波谷與其前後波峰的動態差值門檻法
+        function detectValleyWithAmplitudeThreshold() {
             const len = greenHistory.length;
-            // 檢視最新進來的 7 幀資料（約 230 毫秒）
-            if (len < 7) return;
+            // 滑動窗大小設為 9 幀，確保能看清波谷左右兩側
+            if (len < 9) return;
             
-            const last7Points = greenHistory.slice(-7);
-            const centerValue = last7Points[3]; // 正中間那一 幀 (3幀前)
+            const last9Points = greenHistory.slice(-9);
+            const centerIdxInWindow = 4; // 正中間那一幀的索引
+            const centerValue = last9Points[centerIdxInWindow];
             
-            // 1. 滑動窗最小值檢查：如果中間那一點是這 7 幀裡面的絕對最小值，代表它是一個波谷
-            const minInWindow = Math.min(...last7Points);
-            const maxInWindow = Math.max(...last7Points);
-            
-            // 防止相機完全沒動、數值完全一樣時的死觸發
-            if (maxInWindow - minInWindow < 0.02) return; 
+            // 1. 基礎 V 字谷檢查：中間這點必須小於它左右相鄰的點 (它是滑動窗內局部最小值)
+            const minInWindow = Math.min(...last9Points);
+            if (centerValue !== minInWindow) return;
 
-            if (centerValue === minInWindow) {
-                const now = performance.now();
-                // 因為 centerValue 是 3 幀之前的點，我們將時間往回修正 3 幀（一幀約 33 毫秒）
-                const correctedTime = now - (3 * 33); 
+            // 2. 尋找這個波谷「前、後」的局部波峰 (Peak)
+            const leftSegment = last9Points.slice(0, centerIdxInWindow);
+            const rightSegment = last9Points.slice(centerIdxInWindow + 1);
+            const leftPeak = Math.max(...leftSegment);
+            const rightPeak = Math.max(...rightSegment);
+            
+            // 3. 計算波峰與波谷的實時差值（取左右兩側平均差值，確保不受單邊基底飄移歪斜影響）
+            const currentAmplitude = ((leftPeak - centerValue) + (rightPeak - centerValue)) / 2;
+
+            // 4. 計算動態基準環境振幅（取最近 60 筆約 2 秒內的全域震幅作為分母門檻）
+            const recentWindow = greenHistory.slice(-60);
+            const globalMax = Math.max(...recentWindow);
+            const globalMin = Math.min(...recentWindow);
+            const globalRange = globalMax - globalMin;
+            
+            // 🔒 核心門檻判定：當前波峰波谷的差值，必須達到這兩秒總震幅的 25% 以上
+            // 這行直接落實了您說的「差值達門檻再抓取」，完美排除平坦波段的微幅抖動雜訊
+            if (currentAmplitude < globalRange * 0.25 || globalRange < 0.1) return;
+
+            const now = performance.now();
+            // 由於正中間那點是 4 幀前的歷史資料，將時間往回修準 4 幀
+            const correctedTime = now - (4 * 33); 
+            
+            if (lastPeakTime !== 0) {
+                const rrInterval = correctedTime - lastPeakTime;
                 
-                if (lastPeakTime !== 0) {
-                    const rrInterval = correctedTime - lastPeakTime;
+                // 🔒 生理防護安全鎖 (40 ~ 180 BPM)
+                if (rrInterval >= 335 && rrInterval <= 1500) {
+                    rrHistory.push(rrInterval);
                     
-                    // 🔒 生理不反應期安全鎖：合理心跳範圍 335ms 到 1500ms (40 到 180 BPM)
-                    if (rrInterval >= 335 && rrInterval <= 1500) {
-                        rrHistory.push(rrInterval);
-                        
-                        rrValDisplay.innerText = Math.round(rrInterval);
-                        countValDisplay.innerText = rrHistory.length;
-                        noiseTxt.innerText = "";
-                        
-                        // 🛠️ 紅點標記：正中間那一幀在當下 greenHistory 的實際索引位置是 len - 4
-                        // 這樣紅點就能完美鎖在波谷正中央，並且跟隨滾動不消失
-                        peakIndices.push(len - 4);
-                        
-                        lastPeakTime = correctedTime;
-                    }
-                } else {
+                    rrValDisplay.innerText = Math.round(rrInterval);
+                    countValDisplay.innerText = rrHistory.length;
+                    noiseTxt.innerText = "";
+                    
+                    // 🛠️ 紅點精準戳在 4 幀前的波谷正中央，並隨著 greenHistory 索引 shift 平滑往左流動
+                    peakIndices.push(len - 5);
+                    
                     lastPeakTime = correctedTime;
                 }
+            } else {
+                lastPeakTime = correctedTime;
             }
         }
 
@@ -293,7 +303,6 @@
             if (greenHistory.length < 2) return;
             const min = Math.min(...greenHistory); const max = Math.max(...greenHistory); const range = (max - min) || 1;
             
-            // 繪製原始脈搏波形（綠色）
             waveCtx.beginPath(); waveCtx.strokeStyle = '#00ff66'; waveCtx.lineWidth = 2;
             for (let i = 0; i < greenHistory.length; i++) {
                 const x = (i / (maxWavePoints - 1)) * w;
@@ -302,7 +311,7 @@
             }
             waveCtx.stroke();
 
-            // 🛠️ 繪製所有留存的歷史紅點：精準對齊波谷，隨著波形一併左移
+            // 繪製紅點標記：精準跟隨凹陷波谷移動，不會在滾動時跳掉或消失
             peakIndices.forEach(idx => {
                 if (idx >= 0 && idx < greenHistory.length) {
                     const peakX = (idx / (maxWavePoints - 1)) * w;
