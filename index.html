@@ -3,39 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>rPPG 綠色通道波形化</title>
+    <title>rPPG 500點完整紀錄儀</title>
     <style>
         body { font-family: monospace; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
-        .box { width: 100%; max-width: 360px; height: 270px; margin: 10px auto; background: #000; border-radius: 12px; overflow: hidden; position: relative; border: 2px solid #333; }
-        .box h3 { position: absolute; top: 5px; left: 10px; margin: 0; background: rgba(0,0,0,0.8); padding: 4px 8px; font-size: 0.8rem; border-radius: 4px; z-index: 10; color: #00ff66; border: 1px solid #00ff66; }
+        h2 { font-size: 1.1rem; margin: 5px 0; text-transform: uppercase; letter-spacing: 1px; }
+        .box { width: 100%; max-width: 360px; height: 140px; margin: 6px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #333; }
+        .box h3 { position: absolute; top: 4px; left: 8px; margin: 0; background: rgba(0,0,0,0.8); padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; z-index: 10; color: #00ff66; border: 1px solid #00ff66; }
         
-        /* 框框 1：相機（上面疊加一個用於繪製採樣框的 Canvas） */
         #video-container { position: relative; }
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
         
-        /* 框框 2：即時波形圖 */
-        #waveCanvas { width: 100%; height: 100%; background: #050505; }
+        canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
         
-        button { padding: 15px 30px; font-size: 1.2rem; background: #00ff66; color: #000; border: none; border-radius: 25px; font-weight: bold; cursor: pointer; margin: 15px 0; }
-        #status { color: #ffa502; font-size: 0.9rem; margin-bottom: 10px; }
+        .data-panel { font-size: 0.9rem; color: #ffffff; margin-top: 2px; font-weight: bold; }
+        .data-panel span { color: #00ffff; font-size: 1.1rem; }
+        #countVal { color: #ff4757; }
+
+        button { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 10px 0; }
+        #status { color: #ffa502; font-size: 0.85rem; margin: 5px; min-height: 20px; }
     </style>
 </head>
 <body>
 
-    <h2>Step 3: Signal Extraction</h2>
-    <div id="status">狀態：準備就緒</div>
-    <button id="startBtn">開始監測綠色訊號</button>
+    <h2>rPPG 500 Full-Scale Panel</h2>
+    <div id="status">系統就緒</div>
+    <button id="startBtn">開始完整記錄 500 下</button>
 
-    <div class="box id="video-container">
-        <h3>[1] Face Target Area</h3>
+    <div class="box" id="video-container">
+        <h3>[1] Face ROI Target</h3>
         <video id="testVideo" autoplay playsinline muted></video>
         <canvas id="overlayCanvas"></canvas>
     </div>
 
     <div class="box">
-        <h3>[2] Real-time Green Intensity Wave</h3>
-        <canvas id="waveCanvas"></canvas>
+        <h3>[2] rPPG Waveform</h3>
+        <canvas id="waveCanvas" class="chart"></canvas>
+    </div>
+
+    <div class="box">
+        <h3>[3] R-R Full Trend (1 to 500 Beats)</h3>
+        <canvas id="rrCanvas" class="chart"></canvas>
+    </div>
+    
+    <div class="data-panel">
+        Progress: <span id="countVal">0</span>/500 | 
+        Latest R-R: <span id="rrVal">--</span> ms
     </div>
 
     <script>
@@ -44,14 +57,25 @@
         const overlayCtx = overlayCanvas.getContext('2d');
         const waveCanvas = document.getElementById('waveCanvas');
         const waveCtx = waveCanvas.getContext('2d');
+        const rrCanvas = document.getElementById('rrCanvas');
+        const rrCtx = rrCanvas.getContext('2d');
         const btn = document.getElementById('startBtn');
         const status = document.getElementById('status');
+        const rrValDisplay = document.getElementById('rrVal');
+        const countValDisplay = document.getElementById('countVal');
         
         let isRunning = false;
-        let greenHistory = []; // 儲存綠色數值的歷史紀錄
-        const maxPoints = 120;  // 波形圖畫面上顯示的點數（約 4 秒的資料）
+        
+        let greenHistory = [];
+        const maxWavePoints = 120; 
+        
+        // 核心修改：用來完整儲存 500 筆數據，不刪除、不 shift
+        let rrHistory = [];
+        const totalTargetBeats = 500;    
 
-        // 用於在彩色畫面上抓取像素的隱藏 Canvas
+        let lastPeakTime = 0;
+        let isBelowThreshold = true;
+
         const hiddenCanvas = document.createElement('canvas');
         const hiddenCtx = hiddenCanvas.getContext('2d');
 
@@ -67,7 +91,7 @@
                 
                 btn.style.display = "none";
                 isRunning = true;
-                status.innerText = "請將臉部（額頭或臉頰）對準中央方框，並保持靜止。";
+                status.innerText = "請保持靜止，正在從第 1 下累積至第 500 下...";
                 
                 requestAnimationFrame(processLoop);
             } catch (err) {
@@ -76,59 +100,68 @@
         });
 
         function processLoop() {
-            if (!isRunning || video.paused || video.ended) {
+            if (!isRunning) return;
+
+            if (video.paused || video.ended) {
                 requestAnimationFrame(processLoop);
                 return;
             }
 
-            // 同步所有 Canvas 的解析度
             if (overlayCanvas.width !== video.videoWidth && video.videoWidth > 0) {
                 overlayCanvas.width = video.videoWidth;
                 overlayCanvas.height = video.videoHeight;
-                waveCanvas.width = 400;
-                waveCanvas.height = 200;
                 hiddenCanvas.width = video.videoWidth;
                 hiddenCanvas.height = video.videoHeight;
+                
+                waveCanvas.width = 400;  waveCanvas.height = 140;
+                rrCanvas.width = 800;    rrCanvas.height = 140; // 提升三號畫布寬度解析度，讓 500 點畫起來更細膩
             }
 
             if (overlayCanvas.width > 0) {
-                // 定義中央採樣框 (ROI) 的範圍：畫面的中央 30% 到 70%
                 const startX = Math.floor(overlayCanvas.width * 0.35);
                 const endX = Math.floor(overlayCanvas.width * 0.65);
-                const startY = Math.floor(overlayCanvas.height * 0.35);
-                const endY = Math.floor(overlayCanvas.height * 0.65);
+                const startY = Math.floor(overlayCanvas.height * 0.25); 
+                const endY = Math.floor(overlayCanvas.height * 0.55);
                 const widthROI = endX - startX;
                 const heightROI = endY - startY;
 
-                // --- 1. 在彩色畫面上繪製綠色目標框 ---
                 overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
                 overlayCtx.strokeStyle = '#00ff66';
                 overlayCtx.lineWidth = 4;
-                // 因為 video 有被我們用 CSS 鏡像翻轉 (scaleX(-1))，為了讓框框對齊，我們直接畫在對應位置
                 overlayCtx.strokeRect(startX, startY, widthROI, heightROI);
 
-                // --- 2. 提取中央框框內的綠色通道平均值 ---
                 hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
-                // 只抓取中央 ROI 區域的像素，節省運算效能
                 const imgData = hiddenCtx.getImageData(startX, startY, widthROI, heightROI);
                 const data = imgData.data;
 
                 let totalGreen = 0;
                 let pixelCount = 0;
-
                 for (let i = 0; i < data.length; i += 4) {
-                    totalGreen += data[i + 1]; // 累加綠色通道的值 (G)
+                    totalGreen += data[i + 1];
                     pixelCount++;
                 }
 
                 if (pixelCount > 0) {
                     const avgGreen = totalGreen / pixelCount;
                     greenHistory.push(avgGreen);
-                    if (greenHistory.length > maxPoints) greenHistory.shift();
+                    if (greenHistory.length > maxWavePoints) greenHistory.shift();
+
+                    detectHeartBeat(avgGreen);
                 }
 
-                // --- 3. 繪製即時綠色波形圖 (類 PPG) ---
                 drawWaveform();
+                drawRRChart();
+            }
+
+            // 檢查是否集滿 500 下，滿了就終止循環
+            if (rrHistory.length >= totalTargetBeats) {
+                isRunning = false;
+                status.innerText = "🎉 已成功收集 500 下完整心跳！數據已凍結供分析。";
+                status.style.color = "#00ffff";
+                // 停止相機串流省電
+                const stream = video.srcObject;
+                if (stream) stream.getTracks().forEach(track => track.stop());
+                return; 
             }
 
             requestAnimationFrame(processLoop);
@@ -138,27 +171,76 @@
             waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
             if (greenHistory.length < 2) return;
 
-            // 自動縮放 (Auto-Gain)：找出這段時間內的最高與最低亮度，放大微弱的心搏訊號
             const min = Math.min(...greenHistory);
             const max = Math.max(...greenHistory);
             const range = (max - min) || 1;
 
             waveCtx.beginPath();
             waveCtx.strokeStyle = '#00ff66';
-            waveCtx.lineWidth = 3;
+            waveCtx.lineWidth = 2;
 
             for (let i = 0; i < greenHistory.length; i++) {
-                // 計算 X 座標（向左滾動效果）
-                const x = (i / (maxPoints - 1)) * waveCanvas.width;
-                
-                // 計算 Y 座標：反轉 Y 軸。
-                // 當微血管充血時，綠光吸收多、反射少（數值下降），反轉後在圖表上就會呈現「向上彈升」的脈搏峰值。
+                const x = (i / (maxWavePoints - 1)) * waveCanvas.width;
                 const y = waveCanvas.height - ((greenHistory[i] - min) / range) * waveCanvas.height;
-
                 if (i === 0) waveCtx.moveTo(x, y);
                 else waveCtx.lineTo(x, y);
             }
             waveCtx.stroke();
+        }
+
+        function detectHeartBeat(currentValue) {
+            if (greenHistory.length < 15) return;
+            
+            const sum = greenHistory.reduce((a, b) => a + b, 0);
+            const avg = sum / greenHistory.length;
+            const now = performance.now();
+            
+            if (currentValue < avg * 0.9998) { 
+                if (isBelowThreshold) {
+                    if (lastPeakTime !== 0) {
+                        const rrInterval = now - lastPeakTime;
+                        if (rrInterval > 450 && rrInterval < 1300) {
+                            
+                            // 關鍵修改：直接往後加，絕不 shift 剔除舊數據
+                            rrHistory.push(rrInterval); 
+                            
+                            rrValDisplay.innerText = Math.round(rrInterval);
+                            countValDisplay.innerText = rrHistory.length;
+                        }
+                    }
+                    lastPeakTime = now;
+                    isBelowThreshold = false; 
+                }
+            } else if (currentValue > avg) {
+                isBelowThreshold = true; 
+            }
+        }
+
+        // 繪製框框 3：全畫面固定比例尺 (1 到 500 點)
+        function drawRRChart() {
+            rrCtx.clearRect(0, 0, rrCanvas.width, rrCanvas.height);
+            if (rrHistory.length < 2) return;
+
+            // 關鍵修改：動態自適應 Y 軸（依據已收集數據的最高/最低值），讓長時間趨勢更明顯
+            const currentMin = Math.min(...rrHistory);
+            const currentMax = Math.max(...rrHistory);
+            const yRange = (currentMax - currentMin) || 1;
+
+            rrCtx.beginPath();
+            rrCtx.strokeStyle = '#00ffff'; 
+            rrCtx.lineWidth = 1.2; // 500點很密，線條再調細一點
+
+            for (let i = 0; i < rrHistory.length; i++) {
+                // 關鍵修改：X 軸永遠除以 500-1，這會讓線條從左邊開始慢慢往右邊「拉長填充」，直到填滿整個框框
+                const x = (i / (totalTargetBeats - 1)) * rrCanvas.width;
+                
+                // 計算高度 (自適應縮放)
+                const y = rrCanvas.height - ((rrHistory[i] - currentMin) / yRange) * rrCanvas.height;
+
+                if (i === 0) rrCtx.moveTo(x, y);
+                else rrCtx.lineTo(x, y);
+            }
+            rrCtx.stroke();
         }
     </script>
 </body>
