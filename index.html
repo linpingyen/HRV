@@ -402,11 +402,27 @@
                 let targetX = 35 + boundedAE * 310;
                 let targetY = 175 - (boundedEoE / 1.5) * 150;
 
-                uCtx.strokeStyle = '#ff0033'; uCtx.lineWidth = 2;
-                uCtx.beginPath(); uCtx.moveTo(targetX - 12, targetY); uCtx.lineTo(targetX + 12, targetY);
-                uCtx.moveTo(targetX, targetY - 12); uCtx.lineTo(targetX, targetY + 12); uCtx.stroke();
-                uCtx.fillStyle = '#ffffff'; uCtx.beginPath(); uCtx.arc(targetX, targetY, 4, 0, 2*Math.PI); uCtx.fill();
-                uCtx.fillStyle = '#ffffff'; uCtx.font = 'bold 12px sans-serif'; uCtx.fillText("★ 您的落點", targetX + 8, targetY - 5);
+                // 1. 畫水平與垂直紅十字準星線（用作精確數據對齊）
+                uCtx.strokeStyle = '#ff0033'; uCtx.lineWidth = 1.5;
+                uCtx.beginPath(); 
+                uCtx.moveTo(targetX - 12, targetY); uCtx.lineTo(targetX + 12, targetY);
+                uCtx.moveTo(targetX, targetY - 12); uCtx.lineTo(targetX, targetY + 12); 
+                uCtx.stroke();
+                
+                // 2. 畫核心中央精密數據白點
+                uCtx.fillStyle = '#ffffff'; uCtx.beginPath(); uCtx.arc(targetX, targetY, 3, 0, 2 * Math.PI); uCtx.fill();
+                
+                // 3. 邊界智慧防切、無星號標籤文字
+                uCtx.fillStyle = '#ffffff'; uCtx.font = 'bold 12px sans-serif';
+                
+                // 偵測是否靠右 (快超出 360 畫布邊緣時文字反向靠左)
+                if (targetX > 280) {
+                    uCtx.textAlign = "right";
+                    uCtx.fillText("您的落點", targetX - 15, targetY - 5);
+                } else {
+                    uCtx.textAlign = "left";
+                    uCtx.fillText("您的落點", targetX + 15, targetY - 5);
+                }
             }
         }
 
