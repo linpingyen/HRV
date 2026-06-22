@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>rPPG 500點完整紀錄儀</title>
+    <title>rPPG 生理訊號過濾監測儀</title>
     <style>
         body { font-family: monospace; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
         h2 { font-size: 1.1rem; margin: 5px 0; text-transform: uppercase; letter-spacing: 1px; }
@@ -19,6 +19,7 @@
         .data-panel { font-size: 0.9rem; color: #ffffff; margin-top: 2px; font-weight: bold; }
         .data-panel span { color: #00ffff; font-size: 1.1rem; }
         #countVal { color: #ff4757; }
+        #noiseTxt { color: #ffbc00; font-size: 0.8rem; display: block; margin-top: 2px; height: 15px; }
 
         button { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 10px 0; }
         #status { color: #ffa502; font-size: 0.85rem; margin: 5px; min-height: 20px; }
@@ -26,9 +27,9 @@
 </head>
 <body>
 
-    <h2>rPPG 500 Full-Scale Panel</h2>
+    <h2>rPPG Artifact Filter Panel</h2>
     <div id="status">系統就緒</div>
-    <button id="startBtn">開始完整記錄 500 下</button>
+    <button id="startBtn">開始精密監測</button>
 
     <div class="box" id="video-container">
         <h3>[1] Face ROI Target</h3>
@@ -42,13 +43,14 @@
     </div>
 
     <div class="box">
-        <h3>[3] R-R Full Trend (1 to 500 Beats)</h3>
+        <h3>[3] R-R Filtered Trend (300-1600ms)</h3>
         <canvas id="rrCanvas" class="chart"></canvas>
     </div>
     
     <div class="data-panel">
         Progress: <span id="countVal">0</span>/500 | 
         Latest R-R: <span id="rrVal">--</span> ms
+        <span id="noiseTxt"></span>
     </div>
 
     <script>
@@ -63,13 +65,12 @@
         const status = document.getElementById('status');
         const rrValDisplay = document.getElementById('rrVal');
         const countValDisplay = document.getElementById('countVal');
+        const noiseTxt = document.getElementById('noiseTxt');
         
         let isRunning = false;
-        
         let greenHistory = [];
         const maxWavePoints = 120; 
         
-        // 核心修改：用來完整儲存 500 筆數據，不刪除、不 shift
         let rrHistory = [];
         const totalTargetBeats = 500;    
 
@@ -91,7 +92,7 @@
                 
                 btn.style.display = "none";
                 isRunning = true;
-                status.innerText = "請保持靜止，正在從第 1 下累積至第 500 下...";
+                status.innerText = "正在記錄 300~1600ms 內的有效心搏...";
                 
                 requestAnimationFrame(processLoop);
             } catch (err) {
@@ -101,7 +102,6 @@
 
         function processLoop() {
             if (!isRunning) return;
-
             if (video.paused || video.ended) {
                 requestAnimationFrame(processLoop);
                 return;
@@ -112,9 +112,8 @@
                 overlayCanvas.height = video.videoHeight;
                 hiddenCanvas.width = video.videoWidth;
                 hiddenCanvas.height = video.videoHeight;
-                
                 waveCanvas.width = 400;  waveCanvas.height = 140;
-                rrCanvas.width = 800;    rrCanvas.height = 140; // 提升三號畫布寬度解析度，讓 500 點畫起來更細膩
+                rrCanvas.width = 800;    rrCanvas.height = 140;
             }
 
             if (overlayCanvas.width > 0) {
@@ -153,12 +152,11 @@
                 drawRRChart();
             }
 
-            // 檢查是否集滿 500 下，滿了就終止循環
             if (rrHistory.length >= totalTargetBeats) {
                 isRunning = false;
-                status.innerText = "🎉 已成功收集 500 下完整心跳！數據已凍結供分析。";
+                status.innerText = "🎉 已成功收集 500 下乾淨心跳！";
                 status.style.color = "#00ffff";
-                // 停止相機串流省電
+                noiseTxt.innerText = "";
                 const stream = video.srcObject;
                 if (stream) stream.getTracks().forEach(track => track.stop());
                 return; 
@@ -199,13 +197,16 @@
                 if (isBelowThreshold) {
                     if (lastPeakTime !== 0) {
                         const rrInterval = now - lastPeakTime;
-                        if (rrInterval > 450 && rrInterval < 1300) {
-                            
-                            // 關鍵修改：直接往後加，絕不 shift 剔除舊數據
+                        
+                        // 🛠️ 核心修改：嚴格限制在 300ms ~ 1600ms 區間內
+                        if (rrInterval >= 300 && rrInterval <= 1600) {
                             rrHistory.push(rrInterval); 
-                            
                             rrValDisplay.innerText = Math.round(rrInterval);
                             countValDisplay.innerText = rrHistory.length;
+                            noiseTxt.innerText = ""; // 清空警告
+                        } else {
+                            // 除錯提示：讓你知道有雜訊被過濾掉了
+                            noiseTxt.innerText = `⚠️ 偵測到無效雜訊 (${Math.round(rrInterval)}ms) 已自動剔除`;
                         }
                     }
                     lastPeakTime = now;
@@ -216,25 +217,20 @@
             }
         }
 
-        // 繪製框框 3：全畫面固定比例尺 (1 到 500 點)
         function drawRRChart() {
             rrCtx.clearRect(0, 0, rrCanvas.width, rrCanvas.height);
             if (rrHistory.length < 2) return;
 
-            // 關鍵修改：動態自適應 Y 軸（依據已收集數據的最高/最低值），讓長時間趨勢更明顯
             const currentMin = Math.min(...rrHistory);
             const currentMax = Math.max(...rrHistory);
             const yRange = (currentMax - currentMin) || 1;
 
             rrCtx.beginPath();
             rrCtx.strokeStyle = '#00ffff'; 
-            rrCtx.lineWidth = 1.2; // 500點很密，線條再調細一點
+            rrCtx.lineWidth = 1.2; 
 
             for (let i = 0; i < rrHistory.length; i++) {
-                // 關鍵修改：X 軸永遠除以 500-1，這會讓線條從左邊開始慢慢往右邊「拉長填充」，直到填滿整個框框
                 const x = (i / (totalTargetBeats - 1)) * rrCanvas.width;
-                
-                // 計算高度 (自適應縮放)
                 const y = rrCanvas.height - ((rrHistory[i] - currentMin) / yRange) * rrCanvas.height;
 
                 if (i === 0) rrCtx.moveTo(x, y);
