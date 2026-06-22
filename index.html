@@ -46,7 +46,7 @@
     <div id="status">系統就緒</div>
     <button id="startBtn">啟動臨床自律神經落點分析</button>
 
-    <!-- 框框 1：已整合中文提示 -->
+    <!-- 框框 1 -->
     <div class="box" id="video-container">
         <h3>[1] 請對準臉部特定區域不要移動</h3>
         <video id="testVideo" autoplay playsinline muted></video>
@@ -72,13 +72,13 @@
         <span id="noiseTxt"></span>
     </div>
 
-    <!-- 框框 4：交大論文核心 Inverted-U 曲線常模對照圖 -->
+    <!-- 框框 4：Inverted-U 曲線常模對照圖 -->
     <div class="box-large">
         <h3>[4] Inverted-U Health Spectrum Mapping</h3>
         <canvas id="uCanvas" class="chart"></canvas>
     </div>
 
-    <!-- 📊 HRV 臨床報告面板（含完整參考區間與臨床解釋） -->
+    <!-- 📊 HRV 臨床報告面板 -->
     <div id="reportPanel">
         <h4>📊 HRV AUTONOMIC REPORT</h4>
         
@@ -149,7 +149,6 @@
         let lastPeakTime = 0;
         let isBelowThreshold = true;
         
-        // 用來記錄最新的 R-peak 是在 greenHistory 陣列中的哪一個索引 index
         let lastPeakIndexInHistory = -1;
 
         const hiddenCanvas = document.createElement('canvas');
@@ -224,7 +223,6 @@
                     const avgGreen = totalGreen / pixelCount;
                     greenHistory.push(avgGreen);
                     
-                    // 當陣列 shift 時，我們標記的 R-peak 點索引也要跟著往前退一格
                     if (greenHistory.length > maxWavePoints) {
                         greenHistory.shift();
                         if (lastPeakIndexInHistory > 0) lastPeakIndexInHistory--;
@@ -247,13 +245,11 @@
             requestAnimationFrame(processLoop);
         }
 
-        // 畫綠色折線圖，並在擷取到的 R-peak 位置畫上「小紅圈」
         function drawWaveform() {
             waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
             if (greenHistory.length < 2) return;
             const min = Math.min(...greenHistory); const max = Math.max(...greenHistory); const range = (max - min) || 1;
             
-            // 畫綠色即時 PPG 曲線
             waveCtx.beginPath(); waveCtx.strokeStyle = '#00ff66'; waveCtx.lineWidth = 2;
             for (let i = 0; i < greenHistory.length; i++) {
                 const x = (i / (maxWavePoints - 1)) * waveCanvas.width;
@@ -262,18 +258,16 @@
             }
             waveCtx.stroke();
 
-            // 在綠色折線圖上，動態圈出 R-peak 點
             if (lastPeakIndexInHistory !== -1 && lastPeakIndexInHistory < greenHistory.length) {
                 const peakX = (lastPeakIndexInHistory / (maxWavePoints - 1)) * waveCanvas.width;
                 const peakY = waveCanvas.height - ((greenHistory[lastPeakIndexInHistory] - min) / range) * waveCanvas.height;
                 
                 waveCtx.beginPath();
-                waveCtx.strokeStyle = '#ff4757'; // 亮紅色小圈
+                waveCtx.strokeStyle = '#ff4757'; 
                 waveCtx.lineWidth = 3;
-                waveCtx.arc(peakX, peakY, 5, 0, 2 * Math.PI); // 半徑為 5 的小圓圈
+                waveCtx.arc(peakX, peakY, 5, 0, 2 * Math.PI); 
                 waveCtx.stroke();
                 
-                // 圓圈核心加上白點，使其更亮眼
                 waveCtx.fillStyle = '#ffffff';
                 waveCtx.beginPath();
                 waveCtx.arc(peakX, peakY, 1.5, 0, 2 * Math.PI);
@@ -293,8 +287,6 @@
                             rrHistory.push(rrInterval); 
                             rrValDisplay.innerText = Math.round(rrInterval); countValDisplay.innerText = rrHistory.length;
                             noiseTxt.innerText = ""; 
-                            
-                            // 成功擷取有效 R-peak，將當前陣列的最後一個元素 index 記錄下來
                             lastPeakIndexInHistory = greenHistory.length - 1;
                         } else { noiseTxt.innerText = `⚠️ 雜訊 (${Math.round(rrInterval)}ms) 已自動過濾`; }
                     }
@@ -316,6 +308,7 @@
             rrCtx.stroke();
         }
 
+        // 🎨 修正處：將畫布中的學術標籤轉換成好懂的「風險族群提示文字」並微調排版
         function drawStaticInvertedU(myAE, myEoE) {
             uCtx.clearRect(0, 0, uCanvas.width, uCanvas.height);
             uCtx.strokeStyle = '#555'; uCtx.lineWidth = 1.5;
@@ -335,12 +328,22 @@
             }
             uCtx.stroke();
 
+            // 左側：心肌缺血風險族群 (原 CHF)
             uCtx.fillStyle = 'rgba(255, 71, 87, 0.2)'; uCtx.beginPath(); uCtx.arc(80, 150, 22, 0, 2*Math.PI); uCtx.fill();
-            uCtx.fillStyle = '#ff4757'; uCtx.fillText("CHF 族群", 63, 153);
+            uCtx.fillStyle = '#ff4757'; uCtx.font = '9px monospace'; // 稍微縮小字體讓中文排版更好看
+            uCtx.fillText("心肌缺血", 62, 148);
+            uCtx.fillText("風險族群", 62, 158);
+
+            // 中間：健康對照組
             uCtx.fillStyle = 'rgba(0, 255, 102, 0.15)'; uCtx.beginPath(); uCtx.arc(210, 65, 32, 0, 2*Math.PI); uCtx.fill();
-            uCtx.fillStyle = '#00ff66'; uCtx.fillText("健康對照組", 182, 68);
+            uCtx.fillStyle = '#00ff66'; uCtx.font = '10px monospace';
+            uCtx.fillText("健康對照組", 182, 68);
+
+            // 右側：心律不整風險族群 (原 AF)
             uCtx.fillStyle = 'rgba(255, 165, 2, 0.2)'; uCtx.beginPath(); uCtx.arc(330, 150, 22, 0, 2*Math.PI); uCtx.fill();
-            uCtx.fillStyle = '#ffa502'; uCtx.fillText("AF 族群", 313, 153);
+            uCtx.fillStyle = '#ffa502'; uCtx.font = '9px monospace';
+            uCtx.fillText("心律不整", 312, 148);
+            uCtx.fillText("風險族群", 312, 158);
 
             if (myAE !== null && myEoE !== null) {
                 let boundedAE = Math.max(0, Math.min(1, myAE));
@@ -396,7 +399,7 @@
             const sdnn = Math.sqrt(variance);
             let diffSumSq = 0; let nn50Count = 0;
             for (let i = 0; i < N - 1; i++) {
-                const diff = Math.abs(rrHistory[i + 1] - rrHistory[i]); diffSumSq += Math.pow(diff; 2); if (diff > 50) nn50Count++;
+                const diff = Math.abs(rrHistory[i + 1] - rrHistory[i]); diffSumSq += Math.pow(diff, 2); if (diff > 50) nn50Count++;
             }
             const rmssd = Math.sqrt(diffSumSq / (N - 1)); const pnn50 = (nn50Count / (N - 1)) * 100;
             const estimatedHF = Math.pow(rmssd, 2) * 0.5; const totalPower = Math.pow(sdnn, 2) * 0.8;
