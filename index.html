@@ -5,149 +5,86 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>rPPG 臨床級自律神經分析儀</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Microsoft JhengHei", sans-serif; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
-        h2 { font-size: 1.1rem; margin: 5px 0; text-transform: uppercase; letter-spacing: 1px; }
-        .box { width: 100%; max-width: 360px; height: 125px; margin: 6px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #333; }
-        .box h3 { position: absolute; top: 4px; left: 8px; margin: 0; background: rgba(0,0,0,0.8); padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; z-index: 10; color: #00ff66; border: 1px solid #00ff66; }
-        .box-large { width: 100%; max-width: 360px; height: 210px; margin: 6px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #333; }
-        .box-large h3 { position: absolute; top: 4px; left: 8px; margin: 0; background: rgba(0,0,0,0.8); padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; z-index: 10; color: #00ffff; border: 1px solid #00ffff; }
+        body { font-family: sans-serif; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
+        .box { width: 100%; max-width: 360px; height: 125px; margin: 6px auto; background: #000; border: 1px solid #333; position: relative; }
+        .box-large { width: 100%; max-width: 360px; height: 210px; margin: 6px auto; background: #000; border: 1px solid #333; position: relative; }
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
         canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
-        .data-panel { font-size: 0.85rem; color: #ffffff; margin: 8px auto; font-weight: bold; max-width: 360px; }
-        #countVal { color: #ff4757; }
-        #noiseTxt { color: #ffbc00; font-size: 0.82rem; display: block; height: 32px; margin-top: 3px; font-weight: bold; }
-        button { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 8px 0; }
-        #reportPanel { display: none; width: 100%; max-width: 360px; margin: 15px auto; text-align: left; background: #111; border: 2px solid #00ffff; border-radius: 8px; padding: 12px; color: #fff; }
-        .hrv-item { margin-bottom: 12px; font-size: 0.85rem; }
-        .hrv-val { color: #ffff00; font-weight: bold; float: right; }
+        #startBtn { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; cursor: pointer; }
+        .data-panel { font-size: 0.85rem; color: #fff; margin: 8px auto; max-width: 360px; }
+        #noiseTxt { color: #ffbc00; font-weight: bold; display: block; height: 20px; }
     </style>
 </head>
 <body>
-
-    <h2>rPPG Autonomic Mapping System</h2>
-    <div id="status">系統就緒</div>
-    <button id="startBtn">啟動臨床自律神經分析</button>
-
-    <div class="box" id="video-container">
-        <h3>[1] 請對準臉部特定區域</h3>
-        <video id="testVideo" autoplay playsinline muted></video>
-        <canvas id="overlayCanvas"></canvas>
-    </div>
-
-    <div class="box">
-        <h3>[2] rPPG 原始脈搏光學訊號</h3>
-        <canvas id="waveCanvas" class="chart"></canvas>
-    </div>
-
-    <div class="box">
-        <h3>[3] R-R Full Trend (1 to 500)</h3>
-        <canvas id="rrCanvas" class="chart"></canvas>
-    </div>
-    
-    <div class="data-panel">
-        Progress: <span id="countVal">0</span>/500 | 
-        Latest R-R: <span id="rrVal">--</span> ms
-        <span id="noiseTxt"></span>
-    </div>
-
-    <div class="box-large">
-        <h3>[4] Inverted-U Health Mapping</h3>
-        <canvas id="uCanvas" class="chart"></canvas>
-    </div>
-
-    <div id="reportPanel">
-        <h4>📊 HRV AUTONOMIC REPORT</h4>
-        <div class="hrv-item">SDNN: <span id="v_sdnn" class="hrv-val">--</span> ms</div>
-        <div class="hrv-item">RMSSD: <span id="v_rmssd" class="hrv-val">--</span> ms</div>
-        <div class="hrv-item">LF/HF Ratio: <span id="v_lfhf" class="hrv-val">--</span></div>
-        <div class="hrv-item" style="color:#00ffff;">Average Entropy (AE): <span id="v_ae" class="hrv-val">--</span></div>
-        <div class="hrv-item" style="color:#00ffff;">Entropy of Entropy (EoE): <span id="v_eoe" class="hrv-val">--</span></div>
-    </div>
+    <h2>rPPG System</h2>
+    <button id="startBtn">啟動分析</button>
+    <div class="box"><video id="testVideo" autoplay playsinline muted></video><canvas id="overlayCanvas"></canvas></div>
+    <div class="box"><canvas id="waveCanvas" class="chart"></canvas></div>
+    <div class="box"><canvas id="rrCanvas" class="chart"></canvas></div>
+    <div class="data-panel">Progress: <span id="countVal">0</span>/500 | R-R: <span id="rrVal">--</span> ms <span id="noiseTxt"></span></div>
+    <div class="box-large"><canvas id="uCanvas" class="chart"></canvas></div>
 
     <script>
-        const video = document.getElementById('testVideo');
-        const overlayCanvas = document.getElementById('overlayCanvas');
-        const overlayCtx = overlayCanvas.getContext('2d');
-        const waveCanvas = document.getElementById('waveCanvas');
-        const waveCtx = waveCanvas.getContext('2d');
-        const rrCanvas = document.getElementById('rrCanvas');
-        const rrCtx = rrCanvas.getContext('2d');
-        const uCanvas = document.getElementById('uCanvas');
-        const uCtx = uCanvas.getContext('2d');
-        
-        let isRunning = false;
-        let greenHistory = [], rrHistory = [], peakIndices = [], lastPeakTime = 0;
-        const hiddenCtx = document.createElement('canvas').getContext('2d');
+        const video = document.getElementById('testVideo'), canvas = document.getElementById('overlayCanvas');
+        const ctx = canvas.getContext('2d'), waveCtx = document.getElementById('waveCanvas').getContext('2d');
+        const rrCtx = document.getElementById('rrCanvas').getContext('2d'), uCtx = document.getElementById('uCanvas').getContext('2d');
+        let isRunning = false, greenHistory = [], rrHistory = [], lastPeakTime = 0, peakIndices = [];
 
-        function setupHighDPI(c, ctx, w, h) {
-            const dpr = window.devicePixelRatio || 1;
-            c.width = w * dpr; c.height = h * dpr; ctx.scale(dpr, dpr);
-        }
-
-        btn.addEventListener('click', async () => {
+        document.getElementById('startBtn').addEventListener('click', async () => {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             video.srcObject = stream;
             isRunning = true;
-            btn.style.display = "none";
-            requestAnimationFrame(processLoop);
+            document.getElementById('startBtn').style.display = "none";
+            requestAnimationFrame(loop);
         });
 
-        function processLoop() {
+        function loop() {
             if (!isRunning) return;
-            // 繪製ROI與計算綠光平均值...
-            const avgGreen = getAvgGreen(); 
-            greenHistory.push(avgGreen);
-            if (greenHistory.length > 120) greenHistory.shift();
+            const w = canvas.width = video.videoWidth, h = canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, w, h);
+            const roi = ctx.getImageData(w*0.35, h*0.25, w*0.3, h*0.3).data;
+            let g = 0; for(let i=1; i<roi.length; i+=4) g += roi[i];
+            greenHistory.push(g / (roi.length/4));
+            if(greenHistory.length > 120) greenHistory.shift();
             
-            detectCardiacPhysioValley();
-            drawWaveform(); drawRRChart();
-            requestAnimationFrame(processLoop);
+            detect();
+            draw();
+            requestAnimationFrame(loop);
         }
 
-        function detectCardiacPhysioValley() {
+        function detect() {
             const now = performance.now();
-            if (lastPeakTime !== 0 && (now - lastPeakTime) < 450) return;
-
+            if (greenHistory.length < 11 || (lastPeakTime !== 0 && (now - lastPeakTime) < 450)) return;
             const windowPoints = greenHistory.slice(-11);
-            if (windowPoints[5] !== Math.min(...windowPoints)) return;
-
-            // 幅度檢查與雜訊排除...
-            if (lastPeakTime !== 0) {
-                const rrInterval = now - lastPeakTime;
-                lastPeakTime = now;
-                if (rrInterval >= 300 && rrInterval <= 1600) {
-                    rrHistory.push(rrInterval);
-                    document.getElementById('countVal').innerText = rrHistory.length;
-                    document.getElementById('rrVal').innerText = Math.round(rrInterval);
-                } else {
-                    document.getElementById('noiseTxt').innerText = `⚠️ 範圍異常: ${Math.round(rrInterval)}ms (自動過濾)`;
+            if (windowPoints[5] === Math.min(...windowPoints)) {
+                if (lastPeakTime !== 0) {
+                    const rr = now - lastPeakTime;
+                    if (rr >= 300 && rr <= 1600) {
+                        rrHistory.push(rr);
+                        document.getElementById('countVal').innerText = rrHistory.length;
+                        document.getElementById('rrVal').innerText = Math.round(rr);
+                        document.getElementById('noiseTxt').innerText = "";
+                    } else {
+                        document.getElementById('noiseTxt').innerText = "⚠️ 異常: " + Math.round(rr) + "ms";
+                    }
                 }
-            } else {
                 lastPeakTime = now;
             }
         }
 
-        function drawStaticInvertedU(myAE, myEoE) {
-            uCtx.clearRect(0, 0, 360, 210);
-            // 繪製座標軸與背景標籤...
-            if (myAE !== null && myEoE !== null) {
-                let tx = 35 + Math.max(0, Math.min(1, myAE)) * 310;
-                let ty = 175 - (Math.max(0, Math.min(1.5, myEoE)) / 1.5) * 150;
-                
-                // 畫十字準星與圓點
-                uCtx.strokeStyle = '#ffffff'; uCtx.lineWidth = 1.5;
-                uCtx.beginPath(); uCtx.moveTo(tx - 15, ty); uCtx.lineTo(tx + 15, ty);
-                uCtx.moveTo(tx, ty - 15); uCtx.lineTo(tx, ty + 15); uCtx.stroke();
-                uCtx.fillStyle = '#ffffff'; uCtx.beginPath(); uCtx.arc(tx, ty, 3, 0, 2*Math.PI); uCtx.fill();
-                
-                // 自動避險文字顯示
-                uCtx.font = 'bold 12px sans-serif';
-                uCtx.textAlign = (tx > 280) ? "right" : "left";
-                uCtx.fillText("您的落點", (tx > 280) ? tx - 12 : tx + 12, ty - 8);
-            }
+        function draw() {
+            // Waveform Drawing
+            waveCtx.clearRect(0,0,360,125);
+            waveCtx.beginPath(); waveCtx.strokeStyle = '#00ff66';
+            greenHistory.forEach((v, i) => waveCtx.lineTo((i/120)*360, 125 - ((v-Math.min(...greenHistory))/(Math.max(...greenHistory)-Math.min(...greenHistory)))*125));
+            waveCtx.stroke();
+            
+            // Inverted U Drawing
+            uCtx.clearRect(0,0,360,210);
+            uCtx.strokeStyle = '#555'; uCtx.beginPath(); uCtx.moveTo(35,15); uCtx.lineTo(35,175); uCtx.lineTo(345,175); uCtx.stroke();
+            // ... (此處可填入之前的 Inverted U 繪圖邏輯)
         }
-        // ...其餘輔助計算函數保持不變
     </script>
 </body>
 </html>
