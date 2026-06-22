@@ -19,17 +19,19 @@
         #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
         canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
         
-        /* 💡 數據面板：強制將內部的 div 設為 block，確保徹底分行 */
+        /* 數據面板 */
         .data-panel { font-size: 0.85rem; color: #ffffff; margin: 10px auto; font-weight: bold; max-width: 360px; text-align: left; padding: 0 10px; line-height: 1.6; }
         .data-panel div { display: block; margin-bottom: 3px; }
         .data-panel span { color: #00ffff; font-size: 1rem; }
         #countVal { color: #ff4757; }
         #noiseTxt { color: #ffbc00; font-size: 0.82rem; display: block; height: auto; margin-top: 5px; font-weight: bold; }
 
-        /* 按鈕區塊與樣式 */
-        .btn-group { margin: 8px 0; }
-        button { padding: 12px 20px; font-size: 1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 0 5px; }
-        #resetBtn { background: #ff4757; color: #fff; }
+        /* 按鈕樣式：初始設定為啟動鈕樣式 */
+        .btn-container { margin: 8px 0; }
+        #actionBtn { padding: 12px 25px; font-size: 1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+        /* 當變為重新測量狀態時的紅底白字樣式 */
+        #actionBtn.reset-state { background: #ff4757; color: #fff; }
+        
         #status { color: #ffa502; font-size: 0.85rem; margin: 5px; min-height: 20px; }
 
         #reportPanel { display: none; width: 100%; max-width: 360px; margin: 15px auto; text-align: left; background: #111; border: 2px solid #00ffff; border-radius: 8px; padding: 12px; box-sizing: border-box; color: #fff; }
@@ -46,9 +48,8 @@
     <h2>rPPG Autonomic Mapping System</h2>
     <div id="status">系統就緒</div>
     
-    <div class="btn-group" id="btnGroup">
-        <button id="startBtn">啟動臨床自律神經落點分析</button>
-        <button id="resetBtn">重新測量</button>
+    <div class="btn-container">
+        <button id="actionBtn">啟動臨床自律神經落點分析</button>
     </div>
 
     <div class="box" id="video-container">
@@ -130,9 +131,7 @@
         const uCanvas = document.getElementById('uCanvas');
         const uCtx = uCanvas.getContext('2d');
         
-        const btnGroup = document.getElementById('btnGroup');
-        const startBtn = document.getElementById('startBtn');
-        const resetBtn = document.getElementById('resetBtn');
+        const actionBtn = document.getElementById('actionBtn');
         
         const status = document.getElementById('status');
         const rrValDisplay = document.getElementById('rrVal');
@@ -150,6 +149,7 @@
         
         let lastPeakTime = 0;
         let peakIndices = [];
+        let activeStream = null; // 記錄目前的攝影機串流
 
         const hiddenCanvas = document.createElement('canvas');
         const hiddenCtx = hiddenCanvas.getContext('2d');
@@ -166,22 +166,31 @@
             drawStaticInvertedU(null, null);
         });
 
-        // 核心啟動測量函式
-        async function startMeasurement() {
-            if (isRunning) return;
+        // 核心動態控制與測量機制
+        actionBtn.addEventListener('click', async () => {
+            // 如果目前正在測量中，再次點擊等於「重新測量」，先中斷舊的攝影機串流與執行狀態
+            if (isRunning) {
+                isRunning = false;
+                if (activeStream) {
+                    activeStream.getTracks().forEach(track => track.stop());
+                }
+            }
+
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
+                // 獲取攝影機串流
+                activeStream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
                     audio: false 
                 });
-                video.srcObject = stream;
+                video.srcObject = activeStream;
                 await video.play();
                 
-                // 開始測量時隱藏按鈕群組
-                btnGroup.style.display = "none";
+                // 💡 關鍵變更：將按鈕切換為「重新測量」紅底樣式
+                actionBtn.innerText = "重新測量";
+                actionBtn.className = "reset-state";
                 reportPanel.style.display = "none"; 
                 
-                // 重設數據面板顯示
+                // 清空重設面板資訊
                 countValDisplay.innerText = "0";
                 rrValDisplay.innerText = "--";
                 hrValDisplay.innerText = "--";
@@ -192,6 +201,7 @@
                 peakIndices = []; 
                 lastPeakTime = 0;
                 isRunning = true;
+                
                 status.innerText = "正在精密記錄 500 下心搏...";
                 status.style.color = "#ffa502";
                 noiseTxt.innerText = "";
@@ -200,10 +210,7 @@
             } catch (err) {
                 status.innerText = "錯誤：" + err.message;
             }
-        }
-
-        startBtn.addEventListener('click', startMeasurement);
-        resetBtn.addEventListener('click', startMeasurement);
+        });
 
         function processLoop() {
             if (!isRunning) return;
@@ -273,12 +280,13 @@
                 status.innerText = "🎉 採集完成！自律神經與健康光譜落點報告已生成。";
                 status.style.color = "#00ffff"; noiseTxt.innerText = "";
                 
-                // 結束後讓按鈕群組重新顯現，供用戶再次測量
-                btnGroup.style.display = "block";
-                startBtn.innerText = "再次執行落點分析";
+                // 💡 測量完畢後：將按鈕切換回綠色並提示再次執行
+                actionBtn.innerText = "再次執行落點分析";
+                actionBtn.className = "";
 
-                const stream = video.srcObject;
-                if (stream) stream.getTracks().forEach(track => track.stop());
+                if (activeStream) {
+                    activeStream.getTracks().forEach(track => track.stop());
+                }
                 calculateHRVMetrics();
                 return; 
             }
