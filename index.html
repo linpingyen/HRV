@@ -19,7 +19,7 @@
         #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
         canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
         
-        .data-panel { font-size: 0.85rem; color: #ffffff; margin: 8px auto; font-weight: bold; max-width: 360px; }
+        .data-panel { font-size: 0.85rem; color: #ffffff; margin: 8px auto; font-weight: bold; max-width: 360px; text-align: left; padding: 0 5px; }
         .data-panel span { color: #00ffff; font-size: 1rem; }
         #countVal { color: #ff4757; }
         #noiseTxt { color: #ffbc00; font-size: 0.82rem; display: block; height: 16px; margin-top: 3px; font-weight: bold; }
@@ -43,7 +43,7 @@
     <button id="startBtn">啟動臨床自律神經落點分析</button>
 
     <div class="box" id="video-container">
-        <h3>[1] 請對準臉部特定區域不要移動</h3>
+        <h3>[1] 請對準額頭特定區域不要移動</h3>
         <video id="testVideo" autoplay playsinline muted></video>
         <canvas id="overlayCanvas"></canvas>
     </div>
@@ -60,7 +60,8 @@
     
     <div class="data-panel">
         Progress: <span id="countVal">0</span>/500 | 
-        Latest R-R: <span id="rrVal">--</span> ms
+        Latest R-R: <span id="rrVal">--</span> ms | 
+        HR: <span id="hrVal" style="color: #ff9f43; font-size: 1rem;">--</span> bpm
         <span id="noiseTxt"></span>
     </div>
 
@@ -72,6 +73,10 @@
     <div id="reportPanel">
         <h4>📊 HRV AUTONOMIC REPORT</h4>
         <div class="hrv-item">
+            <div class="hrv-title" style="color:#ff9f43;">Average HR <span id="v_hr" class="hrv-val" style="color:#ff9f43;">--</span><span> (bpm)</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>平均每分鐘心跳數。靜態下心率能反映基礎代謝與心血管負荷，長期心率過高可能暗示交感神經亢進或體能缺乏休養（參考範圍：60 ~ 100 bpm）。</div>
+        </div>
+        <div class="hrv-item">
             <div class="hrv-title">SDNN <span id="v_sdnn" class="hrv-val">--</span><span> (ms)</span></div>
             <div class="hrv-desc"><strong>臨床解釋：</strong>總體自律神經調節能力指標。數值過低通常代表生理壓力過大、長期疲勞或抗壓性下降（參考範圍：30 ~ 100 ms）。</div>
         </div>
@@ -81,7 +86,7 @@
         </div>
         <div class="hrv-item">
             <div class="hrv-title">pNN50 <span id="v_pnn50" class="hrv-val">--</span><span> (%)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>相鄰心搏差異超過50ms的百分比，同樣反映副交感神經對心臟的即時微調保護力（參考範圍：3% ~ 30%）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>相鄰心搏差異超過50ms的百分比，同樣反映副交感神經對心臟的即時微調保護力（參考範圍：3% ~ 30%').</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">LF <span id="v_lf" class="hrv-val">--</span><span> (ms²)</span></div>
@@ -89,7 +94,7 @@
         </div>
         <div class="hrv-item">
             <div class="hrv-title">HF <span id="v_hf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>高頻能量。與呼吸引發的副交感調控高度同步，代表心臟的即時踩煞車與放鬆能力（參考範圍：100 ~ 800 ms²）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>高頻能量。與呼氣引發的副交感調控高度同步，代表心臟的即時踩煞車與放鬆能力（參考範圍：100 ~ 800 ms²）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">LF/HF Ratio <span id="v_lfhf" class="hrv-val">--</span></div>
@@ -97,11 +102,11 @@
         </div>
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>生理混亂度指標：</strong>評估非線性生理序列的無序度。健康人通常居中，代表系統具備適度的靈活性，既不呆板也不失控。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>評估非線性生理序列的靈活無序度。健康人通常居中，代表系統具備適度的彈性，既不呆板也不失控（參考範圍：0.300 ~ 0.700）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Entropy of Entropy (EoE) <span id="v_eoe" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>動態複雜度指標：</strong>評估混亂度本身的變異結構，是衡量自律神經調適韌性的黃金指標。在倒U字圖形中，頂峰代表最健康的動態平衡。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>評估混亂度本身的動態變異結構，是衡量自律神經調適韌性的黃金指標。在倒U字圖形中，頂峰代表最健康的動態平衡（參考範圍：0.600 ~ 1.200）。</div>
         </div>
     </div>
 
@@ -119,13 +124,14 @@
         const btn = document.getElementById('startBtn');
         const status = document.getElementById('status');
         const rrValDisplay = document.getElementById('rrVal');
+        const hrValDisplay = document.getElementById('hrVal');
         const countValDisplay = document.getElementById('countVal');
         const noiseTxt = document.getElementById('noiseTxt');
         const reportPanel = document.getElementById('reportPanel');
         
         let isRunning = false;
-        let rawGreenHistory = []; // 用於存放最原始的採樣值
-        let greenHistory = [];    // 存放經由移動平均粗粒化平滑後的數據
+        let rawGreenHistory = []; 
+        let greenHistory = [];    
         const maxWavePoints = 120; 
         let rrHistory = [];
         const totalTargetBeats = 500;    
@@ -216,7 +222,6 @@
                     rawGreenHistory.push(avgGreen);
                     if (rawGreenHistory.length > 10) rawGreenHistory.shift();
 
-                    // 💡 【核心粗粒化優化】：執行 5 點滑動均值濾波 (Smoothing) 消除毛刺雜訊
                     let smoothedGreen = avgGreen;
                     if (rawGreenHistory.length >= 5) {
                         const last5 = rawGreenHistory.slice(-5);
@@ -283,7 +288,6 @@
             }
             const baseNoise = totalDiff / (recent60.length - 1);
 
-            // 因曲線已經平滑化，調降些許門檻讓乾淨波谷更容易被鎖定
             if (dropAmplitude < baseNoise * 1.2 || dropAmplitude < 0.02) return;
             if (riseAmplitude < 0.005) return; 
 
@@ -294,6 +298,10 @@
                 if (rrInterval >= 300 && rrInterval <= 1600) {
                     rrHistory.push(rrInterval);
                     rrValDisplay.innerText = Math.round(rrInterval);
+                    
+                    const currentBPM = 60000 / rrInterval;
+                    hrValDisplay.innerText = Math.round(currentBPM);
+
                     countValDisplay.innerText = rrHistory.length;
                     noiseTxt.innerText = ""; 
                     peakIndices.push(len - 6); 
@@ -365,10 +373,30 @@
             
             uCtx.fillStyle = '#999'; 
             uCtx.font = '11px sans-serif';
-            uCtx.fillText("EoE (複雜度)", 42, 23); 
-            uCtx.fillText("AE (混亂度)", 275, 168);
-            uCtx.fillText("0.0", 30, 188); 
-            uCtx.fillText("1.0", 335, 188);
+            uCtx.fillText("AE", 315, 168);
+
+            uCtx.save();
+            uCtx.translate(18, 95);
+            uCtx.rotate(-Math.PI / 2);
+            uCtx.textAlign = "center";
+            uCtx.fillText("EoE", 0, 0);
+            uCtx.restore();
+
+            uCtx.textAlign = "center";
+            uCtx.fillText("0.0", 35, 188);
+            uCtx.fillText("0.2", 35 + 1*62, 188);
+            uCtx.fillText("0.4", 35 + 2*62, 188);
+            uCtx.fillText("0.6", 35 + 3*62, 188);
+            uCtx.fillText("0.8", 35 + 4*62, 188);
+            uCtx.fillText("1.0", 345, 188);
+
+            uCtx.textAlign = "right";
+            uCtx.fillText("0.0", 30, 175);
+            uCtx.fillText("0.3", 30, 175 - 1*30);
+            uCtx.fillText("0.6", 30, 175 - 2*30);
+            uCtx.fillText("0.9", 30, 175 - 3*30);
+            uCtx.fillText("1.2", 30, 175 - 4*30);
+            uCtx.fillText("1.5", 30, 15);
 
             uCtx.strokeStyle = 'rgba(0, 255, 102, 0.45)'; uCtx.lineWidth = 3;
             uCtx.beginPath();
@@ -395,8 +423,6 @@
             uCtx.fillText("心律不整", 305, 142);
             uCtx.fillText("風險族群", 305, 154);
 
-            uCtx.textAlign = "left";
-
             if (myAE !== null && myEoE !== null) {
                 let boundedAE = Math.max(0, Math.min(1, myAE));
                 let boundedEoE = Math.max(0, Math.min(1.5, myEoE));
@@ -417,7 +443,7 @@
                     uCtx.fillText("您的落點", targetX - 15, targetY - 5);
                 } else {
                     uCtx.textAlign = "left";
-                    uCtx.fillText("您的落rm點", targetX + 15, targetY - 5);
+                    uCtx.fillText("您的落點", targetX + 15, targetY - 5);
                 }
             }
         }
@@ -466,6 +492,10 @@
             }
 
             const meanRR = filteredRR.reduce((a, b) => a + b, 0) / N;
+            
+            const avgHR = 60000 / meanRR;
+            document.getElementById('v_hr').innerText = avgHR.toFixed(1);
+
             const variance = filteredRR.reduce((sum, val) => sum + Math.pow(val - meanRR, 2), 0) / N;
             const sdnn = Math.sqrt(variance);
             let diffSumSq = 0; let nn50Count = 0;
