@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>rPPG 訊號視覺化工具</title>
+    <style>
+        body { font-family: monospace; background: #0a0a0a; color: #00ff66; margin: 0; padding: 15px; display: flex; flex-direction: column; align-items: center; }
+        h2 { margin: 5px 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; }
+        .container { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; max-width: 900px; width: 100%; }
+        .box { background: #111; border: 1px solid #00ff66; border-radius: 8px; padding: 10px; flex: 1; min-width: 300px; box-shadow: 0 0 10px rgba(0,255,102,0.1); }
+        video { display: none; } /* 隱藏原始視訊 */
+        canvas { width: 100%; height: auto; background: #000; display: block; border-radius: 4px; }
+        .data-panel { font-size: 1.1rem; margin-top: 5px; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <h2>rPPG Diagnostic Monitor</h2>
+    
+    <div class="container">
+        <div class="box">
+            <h3>[1] Green Channel Live</h3>
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="faceCanvas"></canvas>
+        </div>
+
+        <div class="box">
+            <h3>[2] Real-time rPPG Waveform</h3>
+            <canvas id="ppgCanvas"></canvas>
+        </div>
+    </div>
+
+    <div class="container" style="margin-top: 15px;">
+        <div class="box" style="max-width: 900px;">
+            <h3>[3] R-R Interval History (ms)</h3>
+            <canvas id="rrCanvas" height="150"></canvas>
+            <div class="data-panel">Latest R-R: <span id="rrVal">--</span> ms</div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const faceCanvas = document.getElementById('faceCanvas');
+        const faceCtx = faceCanvas.getContext('2d');
+        
+        const ppgCanvas = document.getElementById('ppgCanvas');
+        const ppgCtx = ppgCanvas.getContext('2d');
+        
+        const rrCanvas = document.getElementById('rrCanvas');
+        const rrCtx = rrCanvas.getContext('2d');
+
+        // 數據儲存
+        let ppgHistory = [];
+        let rrHistory = [];
+        const maxDataPoints = 150; // 波形圖顯示的點數
+        
+        // 峰值偵測與 RR 間期變數
+        let lastPeakTime = 0;
+        let isBelowThreshold = true;
+
+        // 啟動相機
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user", width: 400, height: 300 } 
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                alert("Camera access denied: " + err);
+            }
+        }
+
+        video.addEventListener('play', () => {
+            faceCanvas.width = video.videoWidth;
+            faceCanvas.height = video.videoHeight;
+            ppgCanvas.width = 400; ppgCanvas.height = 200;
+            rrCanvas.width = 800;  rrCanvas.height = 150;
+            
+            function update() {
+                if (video.paused || video.ended) return;
+                
+                // --- 1. 處理綠色通道畫面 ---
+                faceCtx.drawImage(video, 0, 0, faceCanvas.width, faceCanvas.height);
+                const frame = faceCtx.getImageData(0, 0, faceCanvas.width, faceCanvas.height);
+                const data = frame.data;
+                
+                let totalGreen = 0;
+                let pixelCount = 0;
+
+                // 為了效能與保留特定區域，我們這裡範例直接對中央區域（模擬臉部）採樣
+                const startX = Math.floor(faceCanvas.width * 0.3);
+                const endX = Math.floor(faceCanvas.width * 0.7);
+                const startY = Math.floor(faceCanvas.height * 0.3);
+                const endY = Math.floor(faceCanvas.height * 0.7);
+
+                for (let y = 0; y < faceCanvas.height; y++) {
+                    for (let x = 0; x < faceCanvas.width; x++) {
+                        const idx = (y * faceCanvas.width + x) * 4;
+                        
+                        // 提取綠色值
+                        const g = data[idx + 1]; 
+                        
+                        // 將畫面視覺改為「純綠色階」調
+                        data[idx] = 0;     // R
+                        data[idx + 1] = g; // G
+                        data[idx + 2] = 0; // B
+                        
+                        // 計算中央 ROI 的綠色平均值
+                        if (x > startX && x < endX && y > startY && y < endY) {
+                            totalGreen += g;
+                            pixelCount++;
+                        }
+                    }
+                }
+                // 畫回 Canvas，此時畫面只剩綠色
+                faceCtx.putImageData(frame, 0, 0);
+                
+                // 畫出中央採樣框 (ROI) 提示
+                faceCtx.strokeStyle = '#00ff66';
+                faceCtx.lineWidth = 2;
+                faceCtx.strokeRect(startX, startY, endX - startX, endY - startY);
+
+                // --- 2. 類 PPG 波形計算與繪製 ---
+                if (pixelCount > 0) {
+                    const avgGreen = totalGreen / pixelCount;
+                    ppgHistory.push(avgGreen);
+                    if (ppgHistory.length > maxDataPoints) ppgHistory.shift();
+                    
+                    drawPPGWave();
+                    detectHeartBeat(avgGreen);
+                }
+
+                // --- 3. 繪製 RR Interval ---
+                drawRRChart();
+
+                requestAnimationFrame(update);
+            }
+            requestAnimationFrame(update);
+        });
+
+        // 繪製類 PPG 波形 (自動縮放 Y 軸以放大微弱訊號)
+        function drawPPGWave() {
+            ppgCtx.clearRect(0, 0, ppgCanvas.width, ppgCanvas.height);
+            if (ppgHistory.length < 2) return;
+
+            const min = Math.min(...ppgHistory);
+            const max = Math.max(...ppgHistory);
+            const range = (max - min) || 1;
+
+            ppgCtx.beginPath();
+            ppgCtx.strokeStyle = '#00ff66';
+            ppgCtx.lineWidth = 2;
+
+            for (let i = 0; i < ppgHistory.length; i++) {
+                const x = (i / (maxDataPoints - 1)) * ppgCanvas.width;
+                // 反轉 Y 軸，因為血液湧入時綠色光吸收多，反射變少（數值下降），反轉後看起來更像常規心搏波
+                const y = ppgCanvas.height - ((ppgHistory[i] - min) / range) * ppgCanvas.height;
+                
+                if (i === 0) ppgCtx.moveTo(x, y);
+                else ppgCtx.lineTo(x, y);
+            }
+            ppgCtx.stroke();
+        }
+
+        // 簡易心跳峰值偵測與 RR Interval 計算
+        function detectHeartBeat(currentValue) {
+            if (ppgHistory.length < 10) return;
+            
+            // 計算移動平均線作為動態閾值
+            const sum = ppgHistory.reduce((a, b) => a + b, 0);
+            const avg = sum / ppgHistory.length;
+
+            const now = performance.now();
+            
+            // 訊號低於平均值一定比例（代表心臟收縮，光線吸收峰值）
+            if (currentValue < avg * 0.9995) { 
+                if (isBelowThreshold) {
+                    if (lastPeakTime !== 0) {
+                        const rrInterval = now - lastPeakTime;
+                        // 限制合理的生理範圍 (400ms ~ 1500ms，相當於 40~150 BPM)
+                        if (rrInterval > 400 && rrInterval < 1500) {
+                            rrHistory.push(rrInterval);
+                            if (rrHistory.length > 30) rrHistory.shift();
+                            document.getElementById('rrVal').innerText = Math.round(rrInterval);
+                        }
+                    }
+                    lastPeakTime = now;
+                    isBelowThreshold = false; // 鎖定，直到訊號回到閾值以上
+                }
+            } else if (currentValue > avg) {
+                isBelowThreshold = true;
+            }
+        }
+
+        // 繪製 RR Interval 折線圖
+        function drawRRChart() {
+            rrCtx.clearRect(0, 0, rrCanvas.width, rrCanvas.height);
+            if (rrHistory.length < 2) return;
+
+            rrCtx.beginPath();
+            rrCtx.strokeStyle = '#00ffff';
+            rrCtx.lineWidth = 2;
+
+            for (let i = 0; i < rrHistory.length; i++) {
+                const x = (i / 30) * rrCanvas.width;
+                // 將 400ms~1500ms 對應到畫布高度
+                const y = rrCanvas.height - ((rrHistory[i] - 400) / 1100) * rrCanvas.height;
+                
+                if (i === 0) rrCtx.moveTo(x, y);
+                else rrCtx.lineTo(x, y);
+                
+                // 畫資料點
+                rrCtx.fillStyle = '#fff';
+                rrCtx.fillRect(x - 2, y - 2, 4, 4);
+            }
+            rrCtx.stroke();
+        }
+
+        initCamera();
+    </script>
+</body>
+</html>
