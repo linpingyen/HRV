@@ -19,6 +19,13 @@
         #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
         canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
         
+        /* 調整控製面板樣式 */
+        .filter-controls { width: 100%; max-width: 360px; margin: 4px auto 10px auto; background: #141414; border: 1px solid #222; border-radius: 6px; padding: 8px; box-sizing: border-box; text-align: left; font-size: 0.78rem; color: #aaa; }
+        .filter-controls label { display: block; margin-bottom: 5px; font-weight: bold; color: #00ff66; }
+        .filter-controls div { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+        .filter-controls input[type="range"] { flex: 1; margin: 0 10px; accent-color: #00ff66; }
+        .filter-controls span.val-display { color: #fff; width: 45px; text-align: right; font-family: monospace; }
+
         /* 數據面板 */
         .data-panel { font-size: 0.85rem; color: #ffffff; margin: 10px auto; font-weight: bold; max-width: 360px; text-align: left; padding: 0 10px; line-height: 1.6; }
         .data-panel div { display: block; margin-bottom: 3px; }
@@ -26,10 +33,9 @@
         #countVal { color: #ff4757; }
         #noiseTxt { color: #ffbc00; font-size: 0.82rem; display: block; height: auto; margin-top: 5px; font-weight: bold; }
 
-        /* 按鈕樣式：初始設定為啟動鈕樣式 */
+        /* 按鈕樣式 */
         .btn-container { margin: 8px 0; }
         #actionBtn { padding: 12px 25px; font-size: 1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; transition: background 0.3s; }
-        /* 當變為重新測量狀態時的紅底白字樣式 */
         #actionBtn.reset-state { background: #ff4757; color: #fff; }
         
         #status { color: #ffa502; font-size: 0.85rem; margin: 5px; min-height: 20px; }
@@ -59,8 +65,22 @@
     </div>
 
     <div class="box">
-        <h3>[2] rPPG 平滑化脈搏訊號 (經5點滑動平均濾除高頻雜訊)</h3>
+        <h3>[2] rPPG 4階巴特沃斯帶通濾波脈搏訊號</h3>
         <canvas id="waveCanvas" class="chart"></canvas>
+    </div>
+    
+    <div class="filter-controls">
+        <label>⚙️ 臨床濾波研究實驗工具（動態調整波形）</label>
+        <div>
+            <span>低頻下限 (Low Cut):</span>
+            <input type="range" id="lowCutSlider" min="0.4" max="1.2" step="0.05" value="0.7">
+            <span class="val-display" id="lowCutVal">0.70Hz</span>
+        </div>
+        <div>
+            <span>高頻上限 (High Cut):</span>
+            <input type="range" id="highCutSlider" min="1.8" max="4.5" step="0.1" value="2.5">
+            <span class="val-display" id="highCutVal">2.50Hz</span>
+        </div>
     </div>
 
     <div class="box">
@@ -132,6 +152,10 @@
         const uCtx = uCanvas.getContext('2d');
         
         const actionBtn = document.getElementById('actionBtn');
+        const lowCutSlider = document.getElementById('lowCutSlider');
+        const highCutSlider = document.getElementById('highCutSlider');
+        const lowCutValDisplay = document.getElementById('lowCutVal');
+        const highCutValDisplay = document.getElementById('highCutVal');
         
         const status = document.getElementById('status');
         const rrValDisplay = document.getElementById('rrVal');
@@ -141,7 +165,6 @@
         const reportPanel = document.getElementById('reportPanel');
         
         let isRunning = false;
-        let rawGreenHistory = []; 
         let greenHistory = [];    
         const maxWavePoints = 120; 
         let rrHistory = [];
@@ -149,7 +172,15 @@
         
         let lastPeakTime = 0;
         let peakIndices = [];
-        let activeStream = null; // 記錄目前的攝影機串流
+        let activeStream = null;
+
+        // 💡 4階巴特沃斯濾波器記憶狀態變數 (2階串聯共需四組歷史紀錄)
+        let biquad1_v = [0, 0, 0];
+        let biquad2_v = [0, 0, 0];
+        let filterCoefs = null; // 儲存計算好的 a 與 b 係數
+        let estimatedFPS = 30;  // 預設網頁視訊取樣率
+        let frameCount = 0;
+        let fpsStartTime = 0;
 
         const hiddenCanvas = document.createElement('canvas');
         const hiddenCtx = hiddenCanvas.getContext('2d');
@@ -161,14 +192,56 @@
             ctx.scale(dpr, dpr);
         }
 
+        // 💡 數學核心：計算4階巴特沃斯帶通濾波器係數 (拆解為兩個雙二次 IIR 濾波器)
+        function computeButterworthCoefficients(fLow, fHigh, fs) {
+            const fLowNorm = fLow / fs;
+            const fHighNorm = fHigh / fs;
+            
+            // 避免超出奈奎斯特頻率
+            const fl = Math.max(0.01, Math.min(0.49, fLowNorm));
+            const fh = Math.max(0.02, Math.min(0.49, fHighNorm));
+            
+            const r = fh / fl;
+            const w0 = 2 * Math.PI * Math.sqrt(fl * fh);
+            const Q = Math.sqrt(fl * fh) / (fh - fl);
+            
+            // 使用簡化數位雙二次雙線性變換近似法進行串聯係數計算
+            const wc = Math.tan(w0 / 2);
+            const wcSq = wc * wc;
+            
+            // 階段 1 係數 (Biquad 1)
+            const q1 = Q * 1.4142; // 4階巴特沃斯極點分佈係數
+            const d1 = 1 + (wc / q1) + wcSq;
+            const b1 = [wc / (q1 * d1), 0, -wc / (q1 * d1)];
+            const a1 = [(2 * (wcSq - 1)) / d1, (1 - (wc / q1) + wcSq) / d1];
+
+            // 階段 2 係數 (Biquad 2)
+            const q2 = Q * 1.4142;
+            const d2 = 1 + (wc / q2) + wcSq;
+            const b2 = [wc / (q2 * d2), 0, -wc / (q2 * d2)];
+            const a2 = [(2 * (wcSq - 1)) / d2, (1 - (wc / q2) + wcSq) / d2];
+
+            return { b1, a1, b2, a2 };
+        }
+
+        function updateFilterFromSliders() {
+            const fl = parseFloat(lowCutSlider.value);
+            const fh = parseFloat(highCutSlider.value);
+            lowCutValDisplay.innerText = fl.toFixed(2) + "Hz";
+            highCutValDisplay.innerText = fh.toFixed(2) + "Hz";
+            filterCoefs = computeButterworthCoefficients(fl, fh, estimatedFPS);
+        }
+
+        lowCutSlider.addEventListener('input', updateFilterFromSliders);
+        highCutSlider.addEventListener('input', updateFilterFromSliders);
+
         window.addEventListener('load', () => {
             setupHighDPI(uCanvas, uCtx, 360, 210);
             drawStaticInvertedU(null, null);
+            updateFilterFromSliders();
         });
 
-        // 核心動態控制與測量機制
         actionBtn.addEventListener('click', async () => {
-            // 如果目前正在測量中，再次點擊等於「重新測量」，先中斷舊的攝影機串流與執行狀態
             if (isRunning) {
                 isRunning = false;
                 if (activeStream) {
@@ -177,7 +250,6 @@
             }
 
             try {
-                // 獲取攝影機串流
                 activeStream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
                     audio: false 
@@ -185,23 +257,26 @@
                 video.srcObject = activeStream;
                 await video.play();
                 
-                // 💡 關鍵變更：將按鈕切換為「重新測量」紅底樣式
                 actionBtn.innerText = "重新測量";
                 actionBtn.className = "reset-state";
                 reportPanel.style.display = "none"; 
                 
-                // 清空重設面板資訊
                 countValDisplay.innerText = "0";
                 rrValDisplay.innerText = "--";
                 hrValDisplay.innerText = "--";
                 
                 rrHistory = []; 
-                rawGreenHistory = [];
                 greenHistory = [];
                 peakIndices = []; 
                 lastPeakTime = 0;
-                isRunning = true;
                 
+                // 重設濾波記憶區
+                biquad1_v = [0, 0, 0];
+                biquad2_v = [0, 0, 0];
+                frameCount = 0;
+                fpsStartTime = performance.now();
+                
+                isRunning = true;
                 status.innerText = "正在精密記錄 500 下心搏...";
                 status.style.color = "#ffa502";
                 noiseTxt.innerText = "";
@@ -217,6 +292,17 @@
             if (video.paused || video.ended) {
                 requestAnimationFrame(processLoop);
                 return;
+            }
+
+            // 動態估算即時網路攝影機的真實 FPS，讓濾波器更精準
+            frameCount++;
+            const elapsed = performance.now() - fpsStartTime;
+            if (elapsed > 2000 && frameCount > 10) {
+                const currentFPS = (frameCount / elapsed) * 1000;
+                if (Math.abs(currentFPS - estimatedFPS) > 2) {
+                    estimatedFPS = currentFPS;
+                    updateFilterFromSliders(); // 依據新採樣率重新計算係數
+                }
             }
 
             if (overlayCanvas.width !== video.videoWidth && video.videoWidth > 0) {
@@ -251,20 +337,21 @@
 
                 if (pixelCount > 0) {
                     const avgGreen = totalGreen / pixelCount; 
-                    rawGreenHistory.push(avgGreen);
-                    if (rawGreenHistory.length > 10) rawGreenHistory.shift();
-
-                    let smoothedGreen = avgGreen;
-                    if (rawGreenHistory.length >= 5) {
-                        const last5 = rawGreenHistory.slice(-5);
-                        smoothedGreen = last5.reduce((sum, val) => sum + val, 0) / 5;
-                    }
                     
+                    // 💡 執行 4 階巴特沃斯帶通濾波器運算 (串聯 Biquad IIR 差分方程)
+                    let out1 = filterCoefs.b1[0]*avgGreen + biquad1_v[0];
+                    biquad1_v[0] = filterCoefs.b1[1]*avgGreen - filterCoefs.a1[0]*out1 + biquad1_v[1];
+                    biquad1_v[1] = filterCoefs.b1[2]*avgGreen - filterCoefs.a1[1]*out1;
+
+                    let filteredSignal = filterCoefs.b2[0]*out1 + biquad2_v[0];
+                    biquad2_v[0] = filterCoefs.b2[1]*out1 - filterCoefs.a2[0]*filteredSignal + biquad2_v[1];
+                    biquad2_v[1] = filterCoefs.b2[2]*out1 - filterCoefs.a2[1]*filteredSignal;
+
                     if (greenHistory.length >= maxWavePoints) {
                         peakIndices = peakIndices.map(idx => idx - 1).filter(idx => idx >= 0);
                     }
                     
-                    greenHistory.push(smoothedGreen);
+                    greenHistory.push(filteredSignal);
                     if (greenHistory.length > maxWavePoints) {
                         greenHistory.shift();
                     }
@@ -280,7 +367,6 @@
                 status.innerText = "🎉 採集完成！自律神經與健康光譜落點報告已生成。";
                 status.style.color = "#00ffff"; noiseTxt.innerText = "";
                 
-                // 💡 測量完畢後：將按鈕切換回綠色並提示再次執行
                 actionBtn.innerText = "再次執行落點分析";
                 actionBtn.className = "";
 
@@ -299,6 +385,7 @@
             
             const now = performance.now();
             
+            // 💡 生理保護學機制：導入 450 ms 動態心臟不反應期鎖，直接避開重搏脈二次波峰
             if (lastPeakTime !== 0 && (now - lastPeakTime) < 450) {
                 return; 
             }
@@ -319,15 +406,8 @@
             const dropAmplitude = leftPeak - valleyValue;
             const riseAmplitude = rightPeak - valleyValue;
 
-            let totalDiff = 0;
-            const recent60 = greenHistory.slice(-60);
-            for(let i = 1; i < recent60.length; i++) {
-                totalDiff += Math.abs(recent60[i] - recent60[i-1]);
-            }
-            const baseNoise = totalDiff / (recent60.length - 1);
-
-            if (dropAmplitude < baseNoise * 1.2 || dropAmplitude < 0.02) return;
-            if (riseAmplitude < 0.005) return; 
+            // 由於訊號已全面濾波，調整振幅動態判斷門檻
+            if (dropAmplitude < 0.001 || riseAmplitude < 0.001) return; 
 
             if (lastPeakTime !== 0) {
                 const rrInterval = now - lastPeakTime;
