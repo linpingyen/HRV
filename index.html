@@ -53,7 +53,7 @@
     </div>
 
     <div class="box">
-        <h3>[2] rPPG Waveform</h3>
+        <h3>[2] 經生理優化之 rPPG 脈搏特徵波</h3>
         <canvas id="waveCanvas" class="chart"></canvas>
     </div>
 
@@ -108,7 +108,7 @@
 
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>生理混亂度指標：</strong>健康人通常居中。若數值偏向極高（AF）或極低（CHF），代表心臟失去適度的隨機調控機制。</div>
+            <div class="hrv-desc"><strong>生理混亂度指標：</strong>健康人通常居中。若數值偏向極高（心律不整風險族群）或極低（心肌缺血風險族群），代表心臟失去適度的隨機調控機制。</div>
         </div>
         
         <div class="hrv-item">
@@ -140,15 +140,19 @@
         const maxWavePoints = 120; 
         let rrHistory = [];
         const totalTargetBeats = 500;    
-        let lastPeakTime = 0;
-        let isBelowThreshold = true;
         
-        let lastPeakIndexInHistory = -1;
+        // 🛠️ 高精準度濾波變數
+        let lastPeakTime = 0;
+        let localMax = -99999;
+        let localMin = 99999;
+        let adaptiveThreshold = 0;
+        
+        // 🛠️ 儲存畫布上所有紅點 X 座標的陣列 (使其跟隨波形向左移且不消失)
+        let peakXArray = [];
 
         const hiddenCanvas = document.createElement('canvas');
         const hiddenCtx = hiddenCanvas.getContext('2d');
 
-        // 🛠️ 新增高解析度適配函數 (防止 Retina/手機高DPR螢幕字體模糊)
         function setupHighDPI(canvas, ctx, logicalWidth, logicalHeight) {
             const dpr = window.devicePixelRatio || 1;
             canvas.width = logicalWidth * dpr;
@@ -157,7 +161,7 @@
         }
 
         window.addEventListener('load', () => {
-            setupHighDPI(uCanvas, uCtx, 360, 210); // 將基礎邏輯寬度設為 360 與外框一致
+            setupHighDPI(uCanvas, uCtx, 360, 210);
             drawStaticInvertedU(null, null);
         });
 
@@ -174,7 +178,8 @@
                 reportPanel.style.display = "none"; 
                 rrHistory = []; 
                 greenHistory = [];
-                lastPeakIndexInHistory = -1;
+                peakXArray = []; // 清空紅點紀錄
+                lastPeakTime = 0;
                 isRunning = true;
                 status.innerText = "正在精密記錄 500 下心搏...";
                 drawStaticInvertedU(null, null); 
@@ -196,8 +201,6 @@
                 overlayCanvas.height = video.videoHeight;
                 hiddenCanvas.width = video.videoWidth;
                 hiddenCanvas.height = video.videoHeight;
-                
-                // 所有 Chart 同步做高解析度適配
                 setupHighDPI(waveCanvas, waveCtx, 360, 125);
                 setupHighDPI(rrCanvas, rrCtx, 360, 125);
             }
@@ -224,14 +227,22 @@
                 }
 
                 if (pixelCount > 0) {
-                    const avgGreen = totalGreen / pixelCount;
-                    greenHistory.push(avgGreen);
+                    // 🛠️ 生理優化取負號：微血管充血反光變暗，取負能讓生理波峰向上對齊
+                    const avgGreen = - (totalGreen / pixelCount);
                     
+                    // 當陣列滿了，舊數據被推擠出去時，現存的所有紅點 X 座標也必須向左挪移一個間距
+                    if (greenHistory.length >= maxWavePoints) {
+                        const shiftX = 360 / (maxWavePoints - 1);
+                        peakXArray = peakXArray.map(x => x - shiftX).filter(x => x >= 0);
+                    }
+                    
+                    greenHistory.push(avgGreen);
                     if (greenHistory.length > maxWavePoints) {
                         greenHistory.shift();
-                        if (lastPeakIndexInHistory > 0) lastPeakIndexInHistory--;
                     }
-                    detectHeartBeat(avgGreen);
+                    
+                    // 🛠️ 呼叫高精度自適應偵測
+                    detectHeartBeatAdvanced(avgGreen);
                 }
                 drawWaveform();
                 drawRRChart();
@@ -249,13 +260,59 @@
             requestAnimationFrame(processLoop);
         }
 
+        // 🛠️ 高精度 R-peak 觸發核心演算法
+        function detectHeartBeatAdvanced(currentValue) {
+            if (greenHistory.length < 30) return;
+            
+            // 1. 動態追蹤波段最大值與最小值
+            if (currentValue > localMax) localMax = currentValue;
+            if (currentValue < localMin) localMin = currentValue;
+            
+            // 緩慢收斂以應對環境環境光源基底飄移
+            localMax -= (localMax - currentValue) * 0.02;
+            localMin += (currentValue - localMin) * 0.02;
+            
+            // 2. 計算自適應動態觸發門檻 (取 65% 振幅高度)
+            adaptiveThreshold = localMin + (localMax - localMin) * 0.65;
+            
+            const now = performance.now();
+            
+            // 3. 檢查是否超越門檻
+            if (currentValue > adaptiveThreshold) {
+                if (lastPeakTime !== 0) {
+                    const rrInterval = now - lastPeakTime;
+                    
+                    // 🔒 生理不反應期過濾鎖：健康人類兩下心搏絕對不可能小於 335ms (相當於 >180bpm 雜訊)
+                    if (rrInterval >= 335 && rrInterval <= 1500) {
+                        
+                        // 4. 一階微分斜率檢查：當下數值開始小於前一 historic 點，確認為局部最高波峰
+                        const prevValue = greenHistory[greenHistory.length - 2];
+                        if (currentValue < prevValue) { 
+                            rrHistory.push(rrInterval); 
+                            
+                            rrValDisplay.innerText = Math.round(rrInterval); 
+                            countValDisplay.innerText = rrHistory.length;
+                            noiseTxt.innerText = ""; 
+
+                            // 🛠️ 標記紅點：將此時脈搏波尖峰在最右側生成的實體畫布 X 座標 (360) 存入陣列
+                            peakXArray.push(360);
+
+                            lastPeakTime = now;
+                        }
+                    }
+                } else {
+                    lastPeakTime = now;
+                }
+            }
+        }
+
         function drawWaveform() {
-            // 在高解析度運算下，使用內部邏輯寬高 360x125
             const w = 360; const h = 125;
             waveCtx.clearRect(0, 0, w, h);
             if (greenHistory.length < 2) return;
             const min = Math.min(...greenHistory); const max = Math.max(...greenHistory); const range = (max - min) || 1;
             
+            // 繪製綠色脈搏連續波形
             waveCtx.beginPath(); waveCtx.strokeStyle = '#00ff66'; waveCtx.lineWidth = 2;
             for (let i = 0; i < greenHistory.length; i++) {
                 const x = (i / (maxWavePoints - 1)) * w;
@@ -264,41 +321,25 @@
             }
             waveCtx.stroke();
 
-            if (lastPeakIndexInHistory !== -1 && lastPeakIndexInHistory < greenHistory.length) {
-                const peakX = (lastPeakIndexInHistory / (maxWavePoints - 1)) * w;
-                const peakY = h - ((greenHistory[lastPeakIndexInHistory] - min) / range) * h;
-                
-                waveCtx.beginPath();
-                waveCtx.strokeStyle = '#ff4757'; 
-                waveCtx.lineWidth = 3;
-                waveCtx.arc(peakX, peakY, 5, 0, 2 * Math.PI); 
-                waveCtx.stroke();
-                
-                waveCtx.fillStyle = '#ffffff';
-                waveCtx.beginPath();
-                waveCtx.arc(peakX, peakY, 1.5, 0, 2 * Math.PI);
-                waveCtx.fill();
-            }
-        }
-
-        function detectHeartBeat(currentValue) {
-            if (greenHistory.length < 15) return;
-            const sum = greenHistory.reduce((a, b) => a + b, 0); const avg = sum / greenHistory.length; const now = performance.now();
-            
-            if (currentValue < avg * 0.9998) { 
-                if (isBelowThreshold) {
-                    if (lastPeakTime !== 0) {
-                        const rrInterval = now - lastPeakTime;
-                        if (rrInterval >= 300 && rrInterval <= 1600) {
-                            rrHistory.push(rrInterval); 
-                            rrValDisplay.innerText = Math.round(rrInterval); countValDisplay.innerText = rrHistory.length;
-                            noiseTxt.innerText = ""; 
-                            lastPeakIndexInHistory = greenHistory.length - 1;
-                        } else { noiseTxt.innerText = `⚠️ 雜訊 (${Math.round(rrInterval)}ms) 已自動過濾`; }
-                    }
-                    lastPeakTime = now; isBelowThreshold = false; 
+            // 🛠️ 繪製所有留存下來的 R-peak 紅點標記（平滑跟隨滾動且不消失）
+            peakXArray.forEach(peakX => {
+                // 對準當下 X 軸座標位置，並對應其即時波形高度
+                const index = Math.round((peakX / w) * (greenHistory.length - 1));
+                if (index >= 0 && index < greenHistory.length) {
+                    const peakY = h - ((greenHistory[index] - min) / range) * h;
+                    
+                    waveCtx.beginPath();
+                    waveCtx.strokeStyle = '#ff4757'; 
+                    waveCtx.lineWidth = 3;
+                    waveCtx.arc(peakX, peakY, 5, 0, 2 * Math.PI); 
+                    waveCtx.stroke();
+                    
+                    waveCtx.fillStyle = '#ffffff';
+                    waveCtx.beginPath();
+                    waveCtx.arc(peakX, peakY, 1.5, 0, 2 * Math.PI);
+                    waveCtx.fill();
                 }
-            } else if (currentValue > avg) { isBelowThreshold = true; }
+            });
         }
 
         function drawRRChart() {
@@ -315,12 +356,10 @@
             rrCtx.stroke();
         }
 
-        // 🎨 徹底優化中文字型與解析度排版（邏輯寬度為 360，高度為 210）
         function drawStaticInvertedU(myAE, myEoE) {
             const w = 360; const h = 210;
             uCtx.clearRect(0, 0, w, h);
             
-            // 繪製軸線
             uCtx.strokeStyle = '#555'; uCtx.lineWidth = 1.5;
             uCtx.beginPath(); 
             uCtx.moveTo(35, 15); 
@@ -328,7 +367,6 @@
             uCtx.lineTo(345, 175); 
             uCtx.stroke();
             
-            // 坐標軸文字提示 - 換上系統高清晰平滑字型
             uCtx.fillStyle = '#999'; 
             uCtx.font = '11px sans-serif';
             uCtx.fillText("EoE (複雜度)", 42, 23); 
@@ -336,7 +374,6 @@
             uCtx.fillText("0.0", 30, 188); 
             uCtx.fillText("1.0", 335, 188);
 
-            // 繪製交大倒 U 字形常模拋物線
             uCtx.strokeStyle = 'rgba(0, 255, 102, 0.45)'; uCtx.lineWidth = 3;
             uCtx.beginPath();
             for (let xPixel = 35; xPixel <= 345; xPixel++) {
@@ -365,10 +402,8 @@
             uCtx.fillText("心律不整", 305, 142);
             uCtx.fillText("風險族群", 305, 154);
 
-            // 恢復預設對齊（防止影響落點標籤）
             uCtx.textAlign = "left";
 
-            // 繪製您的星號落點
             if (myAE !== null && myEoE !== null) {
                 let boundedAE = Math.max(0, Math.min(1, myAE));
                 let boundedEoE = Math.max(0, Math.min(1.5, myEoE));
