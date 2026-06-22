@@ -19,10 +19,12 @@
         #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
         canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
         
-        .data-panel { font-size: 0.85rem; color: #ffffff; margin: 8px auto; font-weight: bold; max-width: 360px; text-align: left; padding: 0 5px; }
+        /* 數據面板微調：改為區塊垂直排列 */
+        .data-panel { font-size: 0.85rem; color: #ffffff; margin: 10px auto; font-weight: bold; max-width: 360px; text-align: left; padding: 0 10px; line-height: 1.6; }
+        .data-panel div { margin-bottom: 4px; }
         .data-panel span { color: #00ffff; font-size: 1rem; }
         #countVal { color: #ff4757; }
-        #noiseTxt { color: #ffbc00; font-size: 0.82rem; display: block; height: 16px; margin-top: 3px; font-weight: bold; }
+        #noiseTxt { color: #ffbc00; font-size: 0.82rem; display: block; height: auto; margin-top: 5px; font-weight: bold; }
 
         button { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 8px 0; }
         #status { color: #ffa502; font-size: 0.85rem; margin: 5px; min-height: 20px; }
@@ -59,9 +61,9 @@
     </div>
     
     <div class="data-panel">
-        Progress: <span id="countVal">0</span>/500 | 
-        Latest R-R: <span id="rrVal">--</span> ms | 
-        HR: <span id="hrVal" style="color: #ff9f43; font-size: 1rem;">--</span> bpm
+        <div>Progress: <span id="countVal">0</span> / 500</div>
+        <div>Latest R-R: <span id="rrVal">--</span> ms</div>
+        <div>Real-time HR: <span id="hrVal" style="color: #ff9f43; font-size: 1rem;">--</span> bpm</div>
         <span id="noiseTxt"></span>
     </div>
 
@@ -86,7 +88,7 @@
         </div>
         <div class="hrv-item">
             <div class="hrv-title">pNN50 <span id="v_pnn50" class="hrv-val">--</span><span> (%)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>相鄰心搏差異超過50ms的百分比，同樣反映副交感神經對心臟的即時微調保護力（參考範圍：3% ~ 30%').</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>相鄰心搏差異超過50ms的百分比，同樣反映副交感神經對心臟的即時微調保護力（參考範圍：3% ~ 30%）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">LF <span id="v_lf" class="hrv-val">--</span><span> (ms²)</span></div>
@@ -102,7 +104,7 @@
         </div>
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>評估非線性生理序列的靈活無序度。健康人通常居中，代表系統具備適度的彈性，既不呆板也不失控（參考範圍：0.300 ~ 0.700）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>評慢非線性的生理序列靈活無序度。健康人通常居中，代表系統具備適度的彈性，既不呆板也不失控（參考範圍：0.300 ~ 0.700）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Entropy of Entropy (EoE) <span id="v_eoe" class="hrv-val" style="color:#00ffff;">--</span></div>
