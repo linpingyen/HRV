@@ -49,7 +49,7 @@
     </div>
 
     <div class="box">
-        <h3>[2] rPPG 原始脈搏光學訊號 (向下凹陷處為心搏吸收綠光點)</h3>
+        <h3>[2] rPPG 平滑化脈搏訊號 (經5點滑動平均濾除高頻雜訊)</h3>
         <canvas id="waveCanvas" class="chart"></canvas>
     </div>
 
@@ -73,35 +73,35 @@
         <h4>📊 HRV AUTONOMIC REPORT</h4>
         <div class="hrv-item">
             <div class="hrv-title">SDNN <span id="v_sdnn" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>30 ~ 100 ms</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>總體自律神經調節能力指標。數值過低通常代表生理壓力過大、長期疲勞或抗壓性下降（參考範圍：30 ~ 100 ms）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">RMSSD <span id="v_rmssd" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>20 ~ 70 ms</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>副交感神經（迷走神經）活性指標。數值越高代表身體放鬆與夜間修復能力越好；過低暗示身體處於高度焦慮或發炎狀態（參考範圍：20 ~ 70 ms）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">pNN50 <span id="v_pnn50" class="hrv-val">--</span><span> (%)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>3% ~ 30%</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>相鄰心搏差異超過50ms的百分比，同樣反映副交感神經對心臟的即時微調保護力（參考範圍：3% ~ 30%）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">LF <span id="v_lf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>150 ~ 1000 ms²</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>低頻能量。主要由交感與副交感神經共同調節，但也常與血管運動及血壓控制相關（參考範圍：150 ~ 1000 ms²）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">HF <span id="v_hf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>100 ~ 800 ms²</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>高頻能量。與呼吸引發的副交感調控高度同步，代表心臟的即時踩煞車與放鬆能力（參考範圍：100 ~ 800 ms²）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">LF/HF Ratio <span id="v_lfhf" class="hrv-val">--</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>0.5 ~ 3.0</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>交感/副交感平衡指標。比值過高代表交感亢進、緊繃焦慮；比值過低代表副交感過盛、缺乏動力（參考範圍：0.5 ~ 3.0）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>生理混亂度指標：</strong>健康人通常居中。</div>
+            <div class="hrv-desc"><strong>生理混亂度指標：</strong>評估非線性生理序列的無序度。健康人通常居中，代表系統具備適度的靈活性，既不呆板也不失控。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Entropy of Entropy (EoE) <span id="v_eoe" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>動態複雜度指標：</strong>自律神經健康的黃金峰值。</div>
+            <div class="hrv-desc"><strong>動態複雜度指標：</strong>評估混亂度本身的變異結構，是衡量自律神經調適韌性的黃金指標。在倒U字圖形中，頂峰代表最健康的動態平衡。</div>
         </div>
     </div>
 
@@ -124,7 +124,8 @@
         const reportPanel = document.getElementById('reportPanel');
         
         let isRunning = false;
-        let greenHistory = [];
+        let rawGreenHistory = []; // 用於存放最原始的採樣值
+        let greenHistory = [];    // 存放經由移動平均粗粒化平滑後的數據
         const maxWavePoints = 120; 
         let rrHistory = [];
         const totalTargetBeats = 500;    
@@ -159,6 +160,7 @@
                 btn.style.display = "none";
                 reportPanel.style.display = "none"; 
                 rrHistory = []; 
+                rawGreenHistory = [];
                 greenHistory = [];
                 peakIndices = []; 
                 lastPeakTime = 0;
@@ -211,12 +213,21 @@
 
                 if (pixelCount > 0) {
                     const avgGreen = totalGreen / pixelCount; 
+                    rawGreenHistory.push(avgGreen);
+                    if (rawGreenHistory.length > 10) rawGreenHistory.shift();
+
+                    // 💡 【核心粗粒化優化】：執行 5 點滑動均值濾波 (Smoothing) 消除毛刺雜訊
+                    let smoothedGreen = avgGreen;
+                    if (rawGreenHistory.length >= 5) {
+                        const last5 = rawGreenHistory.slice(-5);
+                        smoothedGreen = last5.reduce((sum, val) => sum + val, 0) / 5;
+                    }
                     
                     if (greenHistory.length >= maxWavePoints) {
                         peakIndices = peakIndices.map(idx => idx - 1).filter(idx => idx >= 0);
                     }
                     
-                    greenHistory.push(avgGreen);
+                    greenHistory.push(smoothedGreen);
                     if (greenHistory.length > maxWavePoints) {
                         greenHistory.shift();
                     }
@@ -245,7 +256,6 @@
             
             const now = performance.now();
             
-            // 💡 基礎硬體級防重複鎖（450ms 不反應期）
             if (lastPeakTime !== 0 && (now - lastPeakTime) < 450) {
                 return; 
             }
@@ -254,22 +264,18 @@
             const valleyIdxInWindow = 5; 
             const valleyValue = windowPoints[valleyIdxInWindow];
             
-            // 特徵 1：滑動窗內絕對波谷
             const minInWindow = Math.min(...windowPoints);
             if (valleyValue !== minInWindow) return;
 
-            // 特徵 2：回溯左側（吸收前的高峰）
             const leftSegment = windowPoints.slice(1, valleyIdxInWindow); 
             const leftPeak = Math.max(...leftSegment);
             
-            // 特徵 3：回溯右側（回彈波峰）
             const rightSegment = windowPoints.slice(valleyIdxInWindow + 1, 10);
             const rightPeak = Math.max(...rightSegment);
 
             const dropAmplitude = leftPeak - valleyValue;
             const riseAmplitude = rightPeak - valleyValue;
 
-            // 計算最近環境波動雜訊
             let totalDiff = 0;
             const recent60 = greenHistory.slice(-60);
             for(let i = 1; i < recent60.length; i++) {
@@ -277,26 +283,21 @@
             }
             const baseNoise = totalDiff / (recent60.length - 1);
 
-            // 自適應強度門檻檢驗
-            if (dropAmplitude < baseNoise * 1.5 || dropAmplitude < 0.04) return;
-            if (riseAmplitude < 0.01) return; 
+            // 因曲線已經平滑化，調降些許門檻讓乾淨波谷更容易被鎖定
+            if (dropAmplitude < baseNoise * 1.2 || dropAmplitude < 0.02) return;
+            if (riseAmplitude < 0.005) return; 
 
             if (lastPeakTime !== 0) {
                 const rrInterval = now - lastPeakTime;
-                
-                // 💡 【重要關鍵修正】：不論數據如何，只要是個被捕獲的波谷事件，就必須更新時間軸起點，防止系統卡死！
                 lastPeakTime = now;
 
                 if (rrInterval >= 300 && rrInterval <= 1600) {
-                    // ✅ 論文黃金生理區間：存入歷史紀錄、畫上標記紅點、推進進度
                     rrHistory.push(rrInterval);
                     rrValDisplay.innerText = Math.round(rrInterval);
                     countValDisplay.innerText = rrHistory.length;
-                    noiseTxt.innerText = ""; // 正常訊號，清空警告
-                    
+                    noiseTxt.innerText = ""; 
                     peakIndices.push(len - 6); 
                 } else {
-                    // ⚠️ 超出 300 ~ 1600ms 論文範圍：跳出即時黃字警告，安全隔離排除、不計入 500 次進度
                     noiseTxt.innerText = `⚠️ [生理訊號異常] R-R 範圍錯誤：${Math.round(rrInterval)} ms (已被程式安全隔離，下一個 R-R 繼續連續抓取)`;
                 }
             } else {
@@ -402,26 +403,21 @@
                 let targetX = 35 + boundedAE * 310;
                 let targetY = 175 - (boundedEoE / 1.5) * 150;
 
-                // 1. 畫水平與垂直紅十字準星線（用作精確數據對齊）
                 uCtx.strokeStyle = '#ff0033'; uCtx.lineWidth = 1.5;
                 uCtx.beginPath(); 
                 uCtx.moveTo(targetX - 12, targetY); uCtx.lineTo(targetX + 12, targetY);
                 uCtx.moveTo(targetX, targetY - 12); uCtx.lineTo(targetX, targetY + 12); 
                 uCtx.stroke();
                 
-                // 2. 畫核心中央精密數據白點
                 uCtx.fillStyle = '#ffffff'; uCtx.beginPath(); uCtx.arc(targetX, targetY, 3, 0, 2 * Math.PI); uCtx.fill();
-                
-                // 3. 邊界智慧防切、無星號標籤文字
                 uCtx.fillStyle = '#ffffff'; uCtx.font = 'bold 12px sans-serif';
                 
-                // 偵測是否靠右 (快超出 360 畫布邊緣時文字反向靠左)
                 if (targetX > 280) {
                     uCtx.textAlign = "right";
                     uCtx.fillText("您的落點", targetX - 15, targetY - 5);
                 } else {
                     uCtx.textAlign = "left";
-                    uCtx.fillText("您的落點", targetX + 15, targetY - 5);
+                    uCtx.fillText("您的落rm點", targetX + 15, targetY - 5);
                 }
             }
         }
