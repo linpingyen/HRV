@@ -19,14 +19,17 @@
         #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
         canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
         
-        /* 數據面板微調：改為區塊垂直排列 */
+        /* 💡 數據面板：強制將內部的 div 設為 block，確保徹底分行 */
         .data-panel { font-size: 0.85rem; color: #ffffff; margin: 10px auto; font-weight: bold; max-width: 360px; text-align: left; padding: 0 10px; line-height: 1.6; }
-        .data-panel div { margin-bottom: 4px; }
+        .data-panel div { display: block; margin-bottom: 3px; }
         .data-panel span { color: #00ffff; font-size: 1rem; }
         #countVal { color: #ff4757; }
         #noiseTxt { color: #ffbc00; font-size: 0.82rem; display: block; height: auto; margin-top: 5px; font-weight: bold; }
 
-        button { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 8px 0; }
+        /* 按鈕區塊與樣式 */
+        .btn-group { margin: 8px 0; }
+        button { padding: 12px 20px; font-size: 1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 0 5px; }
+        #resetBtn { background: #ff4757; color: #fff; }
         #status { color: #ffa502; font-size: 0.85rem; margin: 5px; min-height: 20px; }
 
         #reportPanel { display: none; width: 100%; max-width: 360px; margin: 15px auto; text-align: left; background: #111; border: 2px solid #00ffff; border-radius: 8px; padding: 12px; box-sizing: border-box; color: #fff; }
@@ -42,7 +45,11 @@
 
     <h2>rPPG Autonomic Mapping System</h2>
     <div id="status">系統就緒</div>
-    <button id="startBtn">啟動臨床自律神經落點分析</button>
+    
+    <div class="btn-group" id="btnGroup">
+        <button id="startBtn">啟動臨床自律神經落點分析</button>
+        <button id="resetBtn">重新測量</button>
+    </div>
 
     <div class="box" id="video-container">
         <h3>[1] 請對準額頭特定區域不要移動</h3>
@@ -61,9 +68,9 @@
     </div>
     
     <div class="data-panel">
-        <div>Progress: <span id="countVal">0</span> / 500</div>
+        <div>Progress: <span id="countVal">0</span>/500</div>
         <div>Latest R-R: <span id="rrVal">--</span> ms</div>
-        <div>Real-time HR: <span id="hrVal" style="color: #ff9f43; font-size: 1rem;">--</span> bpm</div>
+        <div>HR: <span id="hrVal" style="color: #ff9f43; font-size: 1rem;">--</span> bpm</div>
         <span id="noiseTxt"></span>
     </div>
 
@@ -104,7 +111,7 @@
         </div>
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>評慢非線性的生理序列靈活無序度。健康人通常居中，代表系統具備適度的彈性，既不呆板也不失控（參考範圍：0.300 ~ 0.700）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>評估非線性生理序列的靈活無序度。健康人通常居中，代表系統具備適度的彈性，既不呆板也不失控（參考範圍：0.300 ~ 0.700）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Entropy of Entropy (EoE) <span id="v_eoe" class="hrv-val" style="color:#00ffff;">--</span></div>
@@ -123,7 +130,10 @@
         const uCanvas = document.getElementById('uCanvas');
         const uCtx = uCanvas.getContext('2d');
         
-        const btn = document.getElementById('startBtn');
+        const btnGroup = document.getElementById('btnGroup');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        
         const status = document.getElementById('status');
         const rrValDisplay = document.getElementById('rrVal');
         const hrValDisplay = document.getElementById('hrVal');
@@ -156,7 +166,8 @@
             drawStaticInvertedU(null, null);
         });
 
-        btn.addEventListener('click', async () => {
+        // 核心啟動測量函式
+        async function startMeasurement() {
             if (isRunning) return;
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -165,8 +176,16 @@
                 });
                 video.srcObject = stream;
                 await video.play();
-                btn.style.display = "none";
+                
+                // 開始測量時隱藏按鈕群組
+                btnGroup.style.display = "none";
                 reportPanel.style.display = "none"; 
+                
+                // 重設數據面板顯示
+                countValDisplay.innerText = "0";
+                rrValDisplay.innerText = "--";
+                hrValDisplay.innerText = "--";
+                
                 rrHistory = []; 
                 rawGreenHistory = [];
                 greenHistory = [];
@@ -174,13 +193,17 @@
                 lastPeakTime = 0;
                 isRunning = true;
                 status.innerText = "正在精密記錄 500 下心搏...";
+                status.style.color = "#ffa502";
                 noiseTxt.innerText = "";
                 drawStaticInvertedU(null, null); 
                 requestAnimationFrame(processLoop);
             } catch (err) {
                 status.innerText = "錯誤：" + err.message;
             }
-        });
+        }
+
+        startBtn.addEventListener('click', startMeasurement);
+        resetBtn.addEventListener('click', startMeasurement);
 
         function processLoop() {
             if (!isRunning) return;
@@ -249,6 +272,11 @@
                 isRunning = false;
                 status.innerText = "🎉 採集完成！自律神經與健康光譜落點報告已生成。";
                 status.style.color = "#00ffff"; noiseTxt.innerText = "";
+                
+                // 結束後讓按鈕群組重新顯現，供用戶再次測量
+                btnGroup.style.display = "block";
+                startBtn.innerText = "再次執行落點分析";
+
                 const stream = video.srcObject;
                 if (stream) stream.getTracks().forEach(track => track.stop());
                 calculateHRVMetrics();
