@@ -49,7 +49,7 @@
     </div>
 
     <div class="box">
-        <h3>[2] rPPG 原始脈搏光學訊號 (向下綠光吸收點為心搏點)</h3>
+        <h3>[2] rPPG 原始脈搏光學訊號 (向下波谷為吸收綠光之心搏點)</h3>
         <canvas id="waveCanvas" class="chart"></canvas>
     </div>
 
@@ -73,27 +73,27 @@
         <h4>📊 HRV AUTONOMIC REPORT</h4>
         <div class="hrv-item">
             <div class="hrv-title">SDNN <span id="v_sdnn" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>30 ~ 100 ms<br><strong>臨床意義：</strong>總體自律神經調節能力的黃金指標。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>30 ~ 100 ms</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">RMSSD <span id="v_rmssd" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>20 ~ 70 ms<br><strong>臨床意義：</strong>反映副交感神經（迷走神經）活性的心臟保護指標。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>20 ~ 70 ms</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">pNN50 <span id="v_pnn50" class="hrv-val">--</span><span> (%)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>3% ~ 30%<br><strong>臨床意義：</strong>連續心跳間期差異超過 50ms 的百分比。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>3% ~ 30%</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">LF <span id="v_lf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>150 ~ 1000 ms²<br><strong>臨床意義：</strong>多被視為交感神經的活性指標。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>150 ~ 1000 ms²</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">HF <span id="v_hf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>100 ~ 800 ms²<br><strong>臨床意義：</strong>完全由副交感神經所驅動。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>100 ~ 800 ms²</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">LF/HF Ratio <span id="v_lfhf" class="hrv-val">--</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>0.5 ~ 3.0<br><strong>臨床意義：</strong>自律神經平衡度。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>0.5 ~ 3.0</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
@@ -125,17 +125,14 @@
         
         let isRunning = false;
         let greenHistory = [];
-        const maxWavePoints = 120; 
+        const maxWavePoints = 120; // 畫布呈現的點數
         let rrHistory = [];
         const totalTargetBeats = 500;    
         
-        // 🛠️ 找尋生理最小值的濾波器變數
+        // 🛠️ 穩健型動態窗特徵變數
         let lastPeakTime = 0;
-        let localMax = -99999;
-        let localMin = 99999;
-        let adaptiveThreshold = 0;
         
-        // 🛠️ 儲存歷史紅點對應的 greenHistory 索引陣列
+        // 🛠️ 紀錄被標記為波谷的「陣列索引值位置」
         let peakIndices = [];
 
         const hiddenCanvas = document.createElement('canvas');
@@ -166,10 +163,8 @@
                 reportPanel.style.display = "none"; 
                 rrHistory = []; 
                 greenHistory = [];
-                peakIndices = []; // 清空紅點
+                peakIndices = []; 
                 lastPeakTime = 0;
-                localMax = -99999;
-                localMin = 99999;
                 isRunning = true;
                 status.innerText = "正在精密記錄 500 下心搏...";
                 drawStaticInvertedU(null, null); 
@@ -217,9 +212,9 @@
                 }
 
                 if (pixelCount > 0) {
-                    const avgGreen = totalGreen / pixelCount; // 保持原始數值
+                    const avgGreen = totalGreen / pixelCount; // 原始綠色光學數值
                     
-                    // 當陣列滿了要 shift 時，目前所有紅點留存的索引必須全體減 1 
+                    // 當資料滿 120 點左移 shift 時，留存的紅點歷史索引也必須全體跟著減 1
                     if (greenHistory.length >= maxWavePoints) {
                         peakIndices = peakIndices.map(idx => idx - 1).filter(idx => idx >= 0);
                     }
@@ -229,8 +224,8 @@
                         greenHistory.shift();
                     }
                     
-                    // 🛠️ 執行優化後的尋找波谷（綠光吸收極大點）演算法
-                    detectValleyAdvanced(avgGreen);
+                    // 🛠️ 執行新版「即時動態滾動窗」特徵點偵測
+                    detectValleyRollingWindow();
                 }
                 drawWaveform();
                 drawRRChart();
@@ -248,33 +243,37 @@
             requestAnimationFrame(processLoop);
         }
 
-        // 🛠️ 生理特徵優化演算法：尋找綠光吸收最強點（原始訊號之最小值波谷）
-        function detectValleyAdvanced(currentValue) {
-            if (greenHistory.length < 30) return;
+        // 🛠️ 臨床穩健級演算法：2秒滾動視窗動態即時計算門檻
+        function detectValleyRollingWindow() {
+            // 需要有足夠的歷史資料做為動態基準 (至少包含最近 1~2 秒，約 45 幀)
+            if (greenHistory.length < 45) return;
             
-            // 1. 動態追蹤波段最大與最小值
-            if (currentValue > localMax) localMax = currentValue;
-            if (currentValue < localMin) localMin = currentValue;
+            // 1. 直接對目前的快取資料提取絕對最大值與最小值（完全免除相機自動曝光造成的基底漂移干擾）
+            const sliceData = greenHistory.slice(-45); 
+            const currentWindowMax = Math.max(...sliceData);
+            const currentWindowMin = Math.min(...sliceData);
+            const windowRange = currentWindowMax - currentWindowMin;
             
-            // 緩慢收斂以適應環境光源與受試者呼吸之基底飄移
-            localMax -= (localMax - currentValue) * 0.02;
-            localMin += (currentValue - localMin) * 0.02;
-            
-            // 2. 設定自適應低波谷門檻 (取最低 35% 振幅位置，低於此處代表進入心搏收縮充血區)
-            adaptiveThreshold = localMin + (localMax - localMin) * 0.35;
+            // 如果環境極度靜止或沒有任何光學變化，不進行觸發
+            if (windowRange < 0.05) return; 
+
+            // 2. 自適應計算當下的低波谷門檻（取最低 30% 振幅線位置）
+            const dynamicThreshold = currentWindowMin + windowRange * 0.30;
             
             const now = performance.now();
+            const len = greenHistory.length;
+            const currentValue = greenHistory[len - 1];
+            const prevValue = greenHistory[len - 2];
             
-            // 3. 檢查數值是否低於波谷觸發門檻
-            if (currentValue < adaptiveThreshold) {
+            // 3. 判斷是否進入低於門檻的心搏充血區
+            if (currentValue < dynamicThreshold) {
                 if (lastPeakTime !== 0) {
                     const rrInterval = now - lastPeakTime;
                     
-                    // 🔒 生理不反應期過濾鎖：健康人類兩下心跳絕對不可能小於 335ms
+                    // 🔒 生理不反應期鎖：兩下心跳絕對不可能小於 335ms (排除晃動高頻雜訊)
                     if (rrInterval >= 335 && rrInterval <= 1500) {
                         
-                        // 4. 斜率檢驗：當下數值開始大於前一點，確認剛好越過最暗的「局部最低波谷」
-                        const prevValue = greenHistory[greenHistory.length - 2];
+                        // 4. V字底檢驗：當前點數值開始高於前一點，表示剛剛通過了局部的最低凹陷點 (波谷 R-peak)
                         if (currentValue > prevValue) { 
                             rrHistory.push(rrInterval); 
                             
@@ -282,8 +281,8 @@
                             countValDisplay.innerText = rrHistory.length;
                             noiseTxt.innerText = ""; 
 
-                            // 🛠️ 紅點標記：將當下最新的最後一個索引記錄進去
-                            peakIndices.push(greenHistory.length - 1);
+                            // 🛠️ 精準紅點標記：直接鎖定前一個最低點的索引，讓紅點完美黏在波谷底部
+                            peakIndices.push(len - 2);
 
                             lastPeakTime = now;
                         }
@@ -300,7 +299,7 @@
             if (greenHistory.length < 2) return;
             const min = Math.min(...greenHistory); const max = Math.max(...greenHistory); const range = (max - min) || 1;
             
-            // 繪製綠色原始脈搏波形
+            // 繪製脈搏綠色波形
             waveCtx.beginPath(); waveCtx.strokeStyle = '#00ff66'; waveCtx.lineWidth = 2;
             for (let i = 0; i < greenHistory.length; i++) {
                 const x = (i / (maxWavePoints - 1)) * w;
@@ -309,7 +308,7 @@
             }
             waveCtx.stroke();
 
-            // 🛠️ 繪製所有歷史紅點標記：精準黏在對應的波谷像素上，跟隨波形流動
+            // 🛠️ 繪製所有歷史標記紅點：完美對齊綠色波形的波谷位置，平滑流動且不消失
             peakIndices.forEach(idx => {
                 if (idx >= 0 && idx < greenHistory.length) {
                     const peakX = (idx / (maxWavePoints - 1)) * w;
