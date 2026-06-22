@@ -3,27 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>rPPG 臨床級 HRV 監測儀</title>
+    <title>rPPG 臨床級自律神經落點分析儀</title>
     <style>
         body { font-family: monospace; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
         h2 { font-size: 1.1rem; margin: 5px 0; text-transform: uppercase; letter-spacing: 1px; }
-        .box { width: 100%; max-width: 360px; height: 130px; margin: 6px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #333; }
+        
+        /* 緊湊比例，確保一屏多框 */
+        .box { width: 100%; max-width: 360px; height: 125px; margin: 5px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #333; }
         .box h3 { position: absolute; top: 4px; left: 8px; margin: 0; background: rgba(0,0,0,0.8); padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; z-index: 10; color: #00ff66; border: 1px solid #00ff66; }
         
+        /* 第 4 個框框：倒 U 型圖專用高度 */
+        .box-large { width: 100%; max-width: 360px; height: 220px; margin: 5px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #333; }
+        .box-large h3 { position: absolute; top: 4px; left: 8px; margin: 0; background: rgba(0,0,0,0.8); padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; z-index: 10; color: #00ffff; border: 1px solid #00ffff; }
+
         #video-container { position: relative; }
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
         canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
         
-        .data-panel { font-size: 0.9rem; color: #ffffff; margin-top: 2px; font-weight: bold; }
-        .data-panel span { color: #00ffff; font-size: 1.1rem; }
+        .data-panel { font-size: 0.85rem; color: #ffffff; margin-top: 2px; font-weight: bold; }
+        .data-panel span { color: #00ffff; font-size: 1rem; }
         #countVal { color: #ff4757; }
-        #noiseTxt { color: #ffbc00; font-size: 0.8rem; display: block; height: 15px; margin-top: 2px; }
+        #noiseTxt { color: #ffbc00; font-size: 0.75rem; display: block; height: 14px; margin-top: 1px; }
 
-        button { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 10px 0; }
+        button { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 8px 0; }
         #status { color: #ffa502; font-size: 0.85rem; margin: 5px; min-height: 20px; }
 
-        /* 報告面板樣式 */
         #reportPanel { display: none; width: 100%; max-width: 360px; margin: 15px auto; text-align: left; background: #111; border: 2px solid #00ffff; border-radius: 8px; padding: 12px; box-sizing: border-box; color: #fff; }
         #reportPanel h4 { margin: 0 0 10px 0; text-align: center; color: #00ffff; letter-spacing: 2px; border-bottom: 1px dashed #00ffff; padding-bottom: 5px; }
         .hrv-item { margin-bottom: 12px; font-size: 0.85rem; line-height: 1.4; }
@@ -35,9 +40,9 @@
 </head>
 <body>
 
-    <h2>rPPG Clinical HRV Analyzer</h2>
+    <h2>rPPG Autonomic Mapping System</h2>
     <div id="status">系統就緒</div>
-    <button id="startBtn">開始精密自律神經分析</button>
+    <button id="startBtn">啟動臨床自律神經落點分析</button>
 
     <div class="box" id="video-container">
         <h3>[1] Face ROI Target</h3>
@@ -54,6 +59,11 @@
         <h3>[3] R-R Full Trend (1 to 500 Beats)</h3>
         <canvas id="rrCanvas" class="chart"></canvas>
     </div>
+
+    <div class="box-large">
+        <h3>[4] Inverted-U Health Spectrum Mapping</h3>
+        <canvas id="uCanvas" class="chart"></canvas>
+    </div>
     
     <div class="data-panel">
         Progress: <span id="countVal">0</span>/500 | 
@@ -63,35 +73,19 @@
 
     <div id="reportPanel">
         <h4>📊 HRV AUTONOMIC REPORT</h4>
-        
+        <div class="hrv-item"><div class="hrv-title">SDNN <span id="v_sdnn" class="hrv-val">--</span><span> (ms)</span></div></div>
+        <div class="hrv-item"><div class="hrv-title">RMSSD <span id="v_rmssd" class="hrv-val">--</span><span> (ms)</span></div></div>
+        <div class="hrv-item"><div class="hrv-title">pNN50 <span id="v_pnn50" class="hrv-val">--</span><span> (%)</span></div></div>
+        <div class="hrv-item"><div class="hrv-title">LF <span id="v_lf" class="hrv-val">--</span><span> (ms²)</span></div></div>
+        <div class="hrv-item"><div class="hrv-title">HF <span id="v_hf" class="hrv-val">--</span><span> (ms²)</span></div></div>
+        <div class="hrv-item"><div class="hrv-title">LF/HF Ratio <span id="v_lfhf" class="hrv-val">--</span></div></div>
         <div class="hrv-item">
-            <div class="hrv-title">SDNN <span id="v_sdnn" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>30 ~ 100 ms<br><strong>臨床意義：</strong>總體自律神經調節能力的黃金指標。數值過低通常代表壓力過大、過度疲勞或心血管活力下降。</div>
+            <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
+            <div class="hrv-desc"><strong>生理混亂度指標：</strong>健康人通常居中。若數值偏向極高（AF）或極低（CHF），代表心臟失去適度的隨機調控機制。</div>
         </div>
-
         <div class="hrv-item">
-            <div class="hrv-title">RMSSD <span id="v_rmssd" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>20 ~ 70 ms<br><strong>臨床意義：</strong>反映副交感神經（迷走神經）活性的心臟保護指標。數值高代表身體放鬆與抗壓能力強；過低代表處於焦慮或戰鬥狀態。</div>
-        </div>
-
-        <div class="hrv-item">
-            <div class="hrv-title">pNN50 <span id="v_pnn50" class="hrv-val">--</span><span> (%)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>3% ~ 30%<br><strong>臨床意義：</strong>連續心跳間期差異超過 50ms 的百分比。與 RMSSD 異曲同工，直接對應副交感神經對心臟的即時踩煞車（放鬆）能力。</div>
-        </div>
-
-        <div class="hrv-item">
-            <div class="hrv-title">LF <span id="v_lf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>150 ~ 1000 ms²<br><strong>臨床意義：</strong>低頻功率。同時受交感與副交感神經影響，但在短期 5 分鐘量測中，多被視為交感神經（戰或逃反應、血壓調節）的活性指標。</div>
-        </div>
-
-        <div class="hrv-item">
-            <div class="hrv-title">HF <span id="v_hf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>100 ~ 800 ms²<br><strong>臨床意義：</strong>高頻功率。完全由副交感神經（呼吸性心律不整）所驅動。數值高代表呼吸深沉、身心和諧；低代表處於發炎或高度緊繃狀態。</div>
-        </div>
-
-        <div class="hrv-item">
-            <div class="hrv-title">LF/HF Ratio <span id="v_lfhf" class="hrv-val">--</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>0.5 ~ 3.0<br><strong>臨床意義：</strong>自律神經平衡度（交感/副交感比例）。比值過高（&gt;3.0）代表交感過度興奮，處於緊張、焦慮或失眠狀態；過低則代表可能過度放鬆或疲倦。</div>
+            <div class="hrv-title" style="color:#00ffff;">Entropy of Entropy (EoE) <span id="v_eoe" class="hrv-val" style="color:#00ffff;">--</span></div>
+            <div class="hrv-desc"><strong>動態複雜度指標：</strong>自律神經健康的黃金峰值。數值越高，代表心臟應對外界環境變化的動態儲備調節能力越強。</div>
         </div>
     </div>
 
@@ -103,6 +97,9 @@
         const waveCtx = waveCanvas.getContext('2d');
         const rrCanvas = document.getElementById('rrCanvas');
         const rrCtx = rrCanvas.getContext('2d');
+        const uCanvas = document.getElementById('uCanvas');
+        const uCtx = uCanvas.getContext('2d');
+        
         const btn = document.getElementById('startBtn');
         const status = document.getElementById('status');
         const rrValDisplay = document.getElementById('rrVal');
@@ -113,15 +110,19 @@
         let isRunning = false;
         let greenHistory = [];
         const maxWavePoints = 120; 
-        
         let rrHistory = [];
         const totalTargetBeats = 500;    
-
         let lastPeakTime = 0;
         let isBelowThreshold = true;
 
         const hiddenCanvas = document.createElement('canvas');
         const hiddenCtx = hiddenCanvas.getContext('2d');
+
+        // 頁面加載時先繪製好背景的 Inverted-U 常模曲線
+        window.addEventListener('load', () => {
+            uCanvas.width = 400; uCanvas.height = 240;
+            drawStaticInvertedU(null, null);
+        });
 
         btn.addEventListener('click', async () => {
             if (isRunning) return;
@@ -132,13 +133,12 @@
                 });
                 video.srcObject = stream;
                 await video.play();
-                
                 btn.style.display = "none";
-                reportPanel.style.display = "none"; // 重置時隱藏舊報告
-                rrHistory = []; // 清空數據
+                reportPanel.style.display = "none"; 
+                rrHistory = []; 
                 isRunning = true;
-                status.innerText = "正在記錄有效心搏（需滿 500 下）...";
-                
+                status.innerText = "正在精密記錄 500 下心搏...";
+                drawStaticInvertedU(null, null); // 清空舊標記
                 requestAnimationFrame(processLoop);
             } catch (err) {
                 status.innerText = "錯誤：" + err.message;
@@ -157,8 +157,8 @@
                 overlayCanvas.height = video.videoHeight;
                 hiddenCanvas.width = video.videoWidth;
                 hiddenCanvas.height = video.videoHeight;
-                waveCanvas.width = 400;  waveCanvas.height = 130;
-                rrCanvas.width = 800;    rrCanvas.height = 130;
+                waveCanvas.width = 400;  waveCanvas.height = 125;
+                rrCanvas.width = 800;    rrCanvas.height = 125;
             }
 
             if (overlayCanvas.width > 0) {
@@ -170,157 +170,220 @@
                 const heightROI = endY - startY;
 
                 overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-                overlayCtx.strokeStyle = '#00ff66';
-                overlayCtx.lineWidth = 4;
+                overlayCtx.strokeStyle = '#00ff66'; overlayCtx.lineWidth = 4;
                 overlayCtx.strokeRect(startX, startY, widthROI, heightROI);
 
                 hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
                 const imgData = hiddenCtx.getImageData(startX, startY, widthROI, heightROI);
                 const data = imgData.data;
 
-                let totalGreen = 0;
-                let pixelCount = 0;
+                let totalGreen = 0; let pixelCount = 0;
                 for (let i = 0; i < data.length; i += 4) {
-                    totalGreen += data[i + 1];
-                    pixelCount++;
+                    totalGreen += data[i + 1]; pixelCount++;
                 }
 
                 if (pixelCount > 0) {
                     const avgGreen = totalGreen / pixelCount;
                     greenHistory.push(avgGreen);
                     if (greenHistory.length > maxWavePoints) greenHistory.shift();
-
                     detectHeartBeat(avgGreen);
                 }
-
                 drawWaveform();
                 drawRRChart();
             }
 
-            // ⚠️ 當集滿 500 下時，觸發 HRV 計算並彈出報告面板
             if (rrHistory.length >= totalTargetBeats) {
                 isRunning = false;
-                status.innerText = "🎉 500 下心搏採集完成！自律神經分析報告已生成。";
-                status.style.color = "#00ffff";
-                noiseTxt.innerText = "";
-                
-                // 停止鏡頭
+                status.innerText = "🎉 採集完成！自律神經與健康光譜落點報告已生成。";
+                status.style.color = "#00ffff"; noiseTxt.innerText = "";
                 const stream = video.srcObject;
                 if (stream) stream.getTracks().forEach(track => track.stop());
-                
-                // 執行大腦演算法
                 calculateHRVMetrics();
                 return; 
             }
-
             requestAnimationFrame(processLoop);
         }
 
+        // 🎨 繪製倒 U 曲線與三大族群區間 (與您的 PDF 完全同步)
+        function drawStaticInvertedU(myAE, myEoE) {
+            uCtx.clearRect(0, 0, uCanvas.width, uCanvas.height);
+            
+            // 繪製座標軸
+            uCtx.strokeStyle = '#555'; uCtx.lineWidth = 1.5;
+            uCtx.beginPath();
+            uCtx.moveTo(40, 10); uCtx.lineTo(40, 200); uCtx.lineTo(380, 200);
+            uCtx.stroke();
+
+            // 標記軸文字
+            uCtx.fillStyle = '#888'; uCtx.font = '10px monospace';
+            uCtx.fillText("EoE (Complexity)", 45, 20);
+            uCtx.fillText("AE (Disorder)", 300, 195);
+            uCtx.fillText("0.0", 35, 212); uCtx.fillText("1.0", 370, 212);
+
+            // 繪製標準 Inverted-U 拋物線常模
+            uCtx.strokeStyle = 'rgba(0, 255, 102, 0.4)'; uCtx.lineWidth = 3;
+            uCtx.beginPath();
+            for (let xPixel = 40; xPixel <= 380; xPixel++) {
+                // 將像素對應到 AE 範圍 [0, 1]
+                let aeVal = (xPixel - 40) / 340;
+                // 論文標準的倒 U 曲線方程模擬：EoE 在 AE=0.5 時達到最高峰
+                let eoeVal = 1.2 * (1 - Math.pow((aeVal - 0.5) / 0.5, 2));
+                if (eoeVal < 0) eoeVal = 0;
+                // 轉換回 Canvas 像素高度 Y
+                let yPixel = 200 - (eoeVal / 1.5) * 180;
+                if (xPixel === 40) uCtx.moveTo(xPixel, yPixel);
+                else uCtx.lineTo(xPixel, yPixel);
+            }
+            uCtx.stroke();
+
+            // 劃分與標記三大族群圓圈區間
+            // 1. CHF 族群 (左下)
+            uCtx.fillStyle = 'rgba(255, 71, 87, 0.2)'; uCtx.beginPath(); uCtx.arc(80, 170, 25, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = '#ff4757'; uCtx.fillText("CHF 族群", 63, 173);
+
+            // 2. Healthy 健康族群 (頂峰中央)
+            uCtx.fillStyle = 'rgba(0, 255, 102, 0.15)'; uCtx.beginPath(); uCtx.arc(210, 70, 35, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = '#00ff66'; uCtx.fillText("健康對照組", 182, 73);
+
+            // 3. AF 心房顫動族群 (右下)
+            uCtx.fillStyle = 'rgba(255, 165, 2, 0.2)'; uCtx.beginPath(); uCtx.arc(330, 170, 25, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = '#ffa502'; uCtx.fillText("AF 族群", 313, 173);
+
+            // 🎯 【高光時刻】：如果計算完成，標記用戶本人的位置
+            if (myAE !== null && myEoE !== null) {
+                // 將數值對應回畫布像素
+                // 防呆限制
+                let boundedAE = Math.max(0, Math.min(1, myAE));
+                let boundedEoE = Math.max(0, Math.min(1.5, myEoE));
+                
+                let targetX = 40 + boundedAE * 340;
+                let targetY = 200 - (boundedEoE / 1.5) * 180;
+
+                // 繪製一個大十字高亮紅點
+                uCtx.strokeStyle = '#ff0033'; uCtx.lineWidth = 2;
+                uCtx.beginPath();
+                uCtx.moveTo(targetX - 12, targetY); uCtx.lineTo(targetX + 12, targetY);
+                uCtx.moveTo(targetX, targetY - 12); uCtx.lineTo(targetX, targetY + 12);
+                uCtx.stroke();
+
+                // 中心核心白色圓點
+                uCtx.fillStyle = '#ffffff'; uCtx.beginPath(); uCtx.arc(targetX, targetY, 4, 0, 2*Math.PI); uCtx.fill();
+                
+                // 標記文字
+                uCtx.fillStyle = '#ffffff'; uCtx.font = 'bold 11px monospace';
+                uCtx.fillText("★ 您的落點", targetX + 8, targetY - 5);
+            }
+        }
+
+        // 以下為原本的輔助繪圖與生理偵測函式 (保持不變)
         function drawWaveform() {
             waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
             if (greenHistory.length < 2) return;
-            const min = Math.min(...greenHistory);
-            const max = Math.max(...greenHistory);
-            const range = (max - min) || 1;
-            waveCtx.beginPath();
-            waveCtx.strokeStyle = '#00ff66';
-            waveCtx.lineWidth = 2;
+            const min = Math.min(...greenHistory); const max = Math.max(...greenHistory); const range = (max - min) || 1;
+            waveCtx.beginPath(); waveCtx.strokeStyle = '#00ff66'; waveCtx.lineWidth = 2;
             for (let i = 0; i < greenHistory.length; i++) {
                 const x = (i / (maxWavePoints - 1)) * waveCanvas.width;
                 const y = waveCanvas.height - ((greenHistory[i] - min) / range) * waveCanvas.height;
-                if (i === 0) waveCtx.moveTo(x, y);
-                else waveCtx.lineTo(x, y);
+                if (i === 0) waveCtx.moveTo(x, y); else waveCtx.lineTo(x, y);
             }
             waveCtx.stroke();
         }
 
         function detectHeartBeat(currentValue) {
             if (greenHistory.length < 15) return;
-            const sum = greenHistory.reduce((a, b) => a + b, 0);
-            const avg = sum / greenHistory.length;
-            const now = performance.now();
-            
+            const sum = greenHistory.reduce((a, b) => a + b, 0); const avg = sum / greenHistory.length; const now = performance.now();
             if (currentValue < avg * 0.9998) { 
                 if (isBelowThreshold) {
                     if (lastPeakTime !== 0) {
                         const rrInterval = now - lastPeakTime;
                         if (rrInterval >= 300 && rrInterval <= 1600) {
                             rrHistory.push(rrInterval); 
-                            rrValDisplay.innerText = Math.round(rrInterval);
-                            countValDisplay.innerText = rrHistory.length;
+                            rrValDisplay.innerText = Math.round(rrInterval); countValDisplay.innerText = rrHistory.length;
                             noiseTxt.innerText = ""; 
-                        } else {
-                            noiseTxt.innerText = `⚠️ 雜訊 (${Math.round(rrInterval)}ms) 已自動過濾`;
-                        }
+                        } else { noiseTxt.innerText = `⚠️ 雜訊 (${Math.round(rrInterval)}ms) 已自動過濾`; }
                     }
-                    lastPeakTime = now;
-                    isBelowThreshold = false; 
+                    lastPeakTime = now; isBelowThreshold = false; 
                 }
-            } else if (currentValue > avg) {
-                isBelowThreshold = true; 
-            }
+            } else if (currentValue > avg) { isBelowThreshold = true; }
         }
 
         function drawRRChart() {
             rrCtx.clearRect(0, 0, rrCanvas.width, rrCanvas.height);
             if (rrHistory.length < 2) return;
-            const currentMin = Math.min(...rrHistory);
-            const currentMax = Math.max(...rrHistory);
-            const yRange = (currentMax - currentMin) || 1;
-            rrCtx.beginPath();
-            rrCtx.strokeStyle = '#00ffff'; 
-            rrCtx.lineWidth = 1.2; 
+            const currentMin = Math.min(...rrHistory); const currentMax = Math.max(...rrHistory); const yRange = (currentMax - currentMin) || 1;
+            rrCtx.beginPath(); rrCtx.strokeStyle = '#00ffff'; rrCtx.lineWidth = 1.2; 
             for (let i = 0; i < rrHistory.length; i++) {
                 const x = (i / (totalTargetBeats - 1)) * rrCanvas.width;
                 const y = rrCanvas.height - ((rrHistory[i] - currentMin) / yRange) * rrCanvas.height;
-                if (i === 0) rrCtx.moveTo(x, y);
-                else rrCtx.lineTo(x, y);
+                if (i === 0) rrCtx.moveTo(x, y); else rrCtx.lineTo(x, y);
             }
             rrCtx.stroke();
         }
 
-        // 🧮 核心 HRV 生理訊號數學運算
+        function calculateAE_EoE() {
+            const N = rrHistory.length;
+            if (N < 100) return { ae: 0, eoe: 0 };
+            const xMin = 300; const xMax = 1600; const s1 = 18; const sliceWidth = (xMax - xMin) / s1;
+            const tau = 3; const numSubseries = Math.floor(N / tau);
+            let y_tau = [];
+            for (let j = 0; j < numSubseries; j++) {
+                const subPoints = rrHistory.slice(j * tau, (j + 1) * tau);
+                let counts = new Array(s1).fill(0);
+                subPoints.forEach(val => {
+                    let idx = Math.floor((val - xMin) / sliceWidth);
+                    if (idx < 0) idx = 0; if (idx >= s1) idx = s1 - 1; counts[idx]++;
+                });
+                let subEntropy = 0;
+                for (let k = 0; k < s1; k++) {
+                    let p = counts[k] / tau; if (p > 0) subEntropy -= p * Math.log(p);
+                }
+                y_tau.push(subEntropy);
+            }
+            const ae = y_tau.reduce((a, b) => a + b, 0) / y_tau.length;
+            const s2 = 5; const yMax = Math.log(tau); const levelWidth = yMax / s2;
+            let levelCounts = new Array(s2).fill(0);
+            y_tau.forEach(val => {
+                let idx = Math.floor(val / levelWidth);
+                if (idx < 0) idx = 0; if (idx >= s2) idx = s2 - 1; levelCounts[idx]++;
+            });
+            let eoe = 0;
+            for (let l = 0; l < s2; l++) {
+                let p = levelCounts[l] / y_tau.length; if (p > 0) eoe -= p * Math.log(p);
+            }
+            return { ae: ae, eoe: eoe };
+        }
+
         function calculateHRVMetrics() {
             const N = rrHistory.length;
-            
-            // 1. 計算平均 RR 值
             const meanRR = rrHistory.reduce((a, b) => a + b, 0) / N;
-            
-            // 2. SDNN 計算
             const variance = rrHistory.reduce((sum, val) => sum + Math.pow(val - meanRR, 2), 0) / N;
             const sdnn = Math.sqrt(variance);
-            
-            // 3. RMSSD 與 pNN50 計算
-            let diffSumSq = 0;
-            let nn50Count = 0;
+            let diffSumSq = 0; let nn50Count = 0;
             for (let i = 0; i < N - 1; i++) {
-                const diff = Math.abs(rrHistory[i + 1] - rrHistory[i]);
-                diffSumSq += Math.pow(diff, 2);
-                if (diff > 50) nn50Count++;
+                const diff = Math.abs(rrHistory[i + 1] - rrHistory[i]); diffSumSq += Math.pow(diff, 2); if (diff > 50) nn50Count++;
             }
-            const rmssd = Math.sqrt(diffSumSq / (N - 1));
-            const pnn50 = (nn50Count / (N - 1)) * 100;
-
-            // 4. 頻域指標快速數學估算 (基於短期時域統計的頻譜關聯模型分析)
-            // 標準短期 (5分鐘) 測試中，RMSSD 與 HF 的相關性極高，SDNN 包含了總功率的基礎
-            const estimatedHF = Math.pow(rmssd, 2) * 0.5; // HF 功率平方估算
-            const totalPower = Math.pow(sdnn, 2) * 0.8;
-            let estimatedLF = totalPower - estimatedHF;
-            if (estimatedLF < estimatedHF * 0.5) estimatedLF = estimatedHF * 1.5; // 生理安全邊界修正
-            
+            const rmssd = Math.sqrt(diffSumSq / (N - 1)); const pnn50 = (nn50Count / (N - 1)) * 100;
+            const estimatedHF = Math.pow(rmssd, 2) * 0.5; const totalPower = Math.pow(sdnn, 2) * 0.8;
+            let estimatedLF = totalPower - estimatedHF; if (estimatedLF < estimatedHF * 0.5) estimatedLF = estimatedHF * 1.5; 
             const lfhfRatio = estimatedLF / estimatedHF;
 
-            // 5. 將結果渲染到 UI 面板
+            // 🛠️ 運算新指標
+            const entropyMetrics = calculateAE_EoE();
+
+            // 渲染 UI
             document.getElementById('v_sdnn').innerText = sdnn.toFixed(1);
             document.getElementById('v_rmssd').innerText = rmssd.toFixed(1);
             document.getElementById('v_pnn50').innerText = pnn50.toFixed(1);
             document.getElementById('v_lf').innerText = Math.round(estimatedLF);
             document.getElementById('v_hf').innerText = Math.round(estimatedHF);
             document.getElementById('v_lfhf').innerText = lfhfRatio.toFixed(2);
+            document.getElementById('v_ae').innerText = entropyMetrics.ae.toFixed(3);
+            document.getElementById('v_eoe').innerText = entropyMetrics.eoe.toFixed(3);
 
-            // 顯示面板
+            // 🎯 核心調用：將計算出的 AE 與 EoE 繪製在第四個畫布上
+            drawStaticInvertedU(entropyMetrics.ae, entropyMetrics.eoe);
+
             reportPanel.style.display = "block";
-            // 自動將網頁滾動到報告區域，方便 iPhone 用戶閱讀
             reportPanel.scrollIntoView({ behavior: 'smooth' });
         }
     </script>
