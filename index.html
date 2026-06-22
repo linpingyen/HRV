@@ -3,61 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>iOS 相機極簡測試</title>
+    <title>iOS 綠色通道同步測試</title>
     <style>
-        body { font-family: sans-serif; background: #222; color: #fff; text-align: center; padding: 20px; }
-        #camera-container { width: 100%; max-width: 400px; height: 300px; border: 3px dashed #ff4757; margin: 20px auto; background: #000; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); /* 鏡像翻轉符合前鏡頭習慣 */ }
-        button { padding: 15px 30px; font-size: 1.2rem; background: #2ed573; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-        button:active { background: #26af5f; }
-        #status { margin-top: 15px; color: #ffa502; font-family: monospace; }
+        body { font-family: sans-serif; background: #222; color: #fff; text-align: center; padding: 10px; margin: 0; }
+        .box { width: 100%; max-width: 360px; height: 270px; margin: 10px auto; background: #000; border-radius: 12px; overflow: hidden; position: relative; }
+        .box h3 { position: absolute; top: 5px; left: 10px; margin: 0; background: rgba(0,0,0,0.6); padding: 2px 8px; font-size: 0.8rem; border-radius: 4px; z-index: 10; color: #fff; }
+        
+        /* 框框 1：原始相機 */
+        #testVideo { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); border: 2px solid #fff; box-sizing: border-box; border-radius: 12px; }
+        
+        /* 框框 2：綠色通道 */
+        #greenCanvas { width: 100%; height: 100%; object-fit: cover; border: 2px solid #00ff66; box-sizing: border-box; border-radius: 12px; }
+        
+        button { padding: 15px 30px; font-size: 1.2rem; background: #2ed573; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin: 15px 0; }
+        #status { font-family: monospace; color: #ffa502; font-size: 0.9rem; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
-    <h2>iOS Camera Connection Test</h2>
-    
-    <div id="camera-container">
+    <h2>Step 2: Green Channel Sync</h2>
+    <div id="status">狀態：等待開啟相機...</div>
+    <button id="startBtn">開啟相機並同步綠色通道</button>
+
+    <div class="box">
+        <h3>[1] Original Camera</h3>
         <video id="testVideo" autoplay playsinline muted></video>
     </div>
 
-    <button id="testBtn">開啟前鏡頭</button>
-    
-    <div id="status">狀態：等待點擊...</div>
+    <div class="box">
+        <h3>[2] Green Channel Only</h3>
+        <canvas id="greenCanvas"></canvas>
+    </div>
 
     <script>
         const video = document.getElementById('testVideo');
-        const btn = document.getElementById('testBtn');
+        const canvas = document.getElementById('greenCanvas');
+        const ctx = canvas.getContext('2d');
+        const btn = document.getElementById('startBtn');
         const status = document.getElementById('status');
+        let isRunning = false;
 
         btn.addEventListener('click', async () => {
-            status.innerText = "狀態：正在請求權限...";
+            if (isRunning) return;
+            status.innerText = "狀態：啟動相機中...";
             
             try {
-                // 請求相機
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" },
+                    video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
                     audio: false 
                 });
-                
-                status.innerText = "狀態：成功取得串流，正在嘗試播放...";
                 video.srcObject = stream;
+                await video.play();
                 
-                // 針對 iOS 的強制播放與錯誤捕獲
-                video.play().then(() => {
-                    status.innerText = "狀態：畫面成功播放中！";
-                    status.style.color = "#2ed573";
-                    btn.style.display = "none"; // 成功後隱藏按鈕
-                }).catch((playErr) => {
-                    status.innerText = "錯誤 (play)：" + playErr.message;
-                    status.style.color = "#ff4757";
-                });
-
+                status.innerText = "狀態：相機已啟動，開始同步處理像素...";
+                status.style.color = "#2ed573";
+                btn.style.display = "none";
+                isRunning = true;
+                
+                // 觸發綠色通道的循環處理
+                requestAnimationFrame(processFrame);
             } catch (err) {
-                status.innerText = "錯誤 (getUserMedia)：" + err.name + " - " + err.message;
+                status.innerText = "錯誤：" + err.message;
                 status.style.color = "#ff4757";
             }
         });
+
+        function processFrame() {
+            if (!isRunning || video.paused || video.ended) {
+                requestAnimationFrame(processFrame);
+                return;
+            }
+
+            // 1. 動態同步 Canvas 與 Video 的解析度
+            if (canvas.width !== video.videoWidth && video.videoWidth > 0) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
+
+            if (canvas.width > 0) {
+                // 2. 將 Video 畫面畫進 Canvas 暫存
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // 3. 取得像素矩陣
+                const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = frame.data;
+
+                // 4. 進行綠色通道過濾 (每 4 個數字代表一個像素的 R, G, B, A)
+                for (let i = 0; i < data.length; i += 4) {
+                    const g = data[i + 1]; // 取得綠色數值
+                    
+                    data[i] = 0;     // 紅色歸零
+                    data[i + 1] = g; // 保留綠色
+                    data[i + 2] = 0; // 藍色歸零
+                    // data[i + 3] 是透明度 (Alpha)，保持不變
+                }
+
+                // 5. 為了符合前鏡頭習慣，我們在 Canvas 上手動做鏡像翻轉（可自由選擇要不要加）
+                // 這裡先不做複雜翻轉以確保效能與穩定度
+                
+                // 6. 將過濾後的綠色矩陣重新畫回 Canvas
+                ctx.putImageData(frame, 0, 0);
+            }
+
+            // 循環執行
+            requestAnimationFrame(processFrame);
+        }
     </script>
 </body>
 </html>
