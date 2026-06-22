@@ -8,11 +8,9 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Microsoft JhengHei", sans-serif; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
         h2 { font-size: 1.1rem; margin: 5px 0; text-transform: uppercase; letter-spacing: 1px; }
         
-        /* 緊湊比例 */
         .box { width: 100%; max-width: 360px; height: 125px; margin: 6px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #333; }
         .box h3 { position: absolute; top: 4px; left: 8px; margin: 0; background: rgba(0,0,0,0.8); padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; z-index: 10; color: #00ff66; border: 1px solid #00ff66; }
         
-        /* Inverted-U 拋物線專用大框框 */
         .box-large { width: 100%; max-width: 360px; height: 210px; margin: 6px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #333; }
         .box-large h3 { position: absolute; top: 4px; left: 8px; margin: 0; background: rgba(0,0,0,0.8); padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; z-index: 10; color: #00ffff; border: 1px solid #00ffff; }
 
@@ -21,7 +19,6 @@
         #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
         canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
         
-        /* 數據面板位置（RR趨勢圖正下方） */
         .data-panel { font-size: 0.85rem; color: #ffffff; margin: 8px auto; font-weight: bold; max-width: 360px; }
         .data-panel span { color: #00ffff; font-size: 1rem; }
         #countVal { color: #ff4757; }
@@ -30,7 +27,6 @@
         button { padding: 12px 25px; font-size: 1.1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 8px 0; }
         #status { color: #ffa502; font-size: 0.85rem; margin: 5px; min-height: 20px; }
 
-        /* 臨床報告面板 */
         #reportPanel { display: none; width: 100%; max-width: 360px; margin: 15px auto; text-align: left; background: #111; border: 2px solid #00ffff; border-radius: 8px; padding: 12px; box-sizing: border-box; color: #fff; }
         #reportPanel h4 { margin: 0 0 10px 0; text-align: center; color: #00ffff; letter-spacing: 2px; border-bottom: 1px dashed #00ffff; padding-bottom: 5px; }
         .hrv-item { margin-bottom: 12px; font-size: 0.85rem; line-height: 1.4; }
@@ -53,7 +49,7 @@
     </div>
 
     <div class="box">
-        <h3>[2] 經生理優化之 rPPG 脈搏特徵波</h3>
+        <h3>[2] rPPG 原始脈搏光學訊號 (向下綠光吸收點為心搏點)</h3>
         <canvas id="waveCanvas" class="chart"></canvas>
     </div>
 
@@ -75,45 +71,37 @@
 
     <div id="reportPanel">
         <h4>📊 HRV AUTONOMIC REPORT</h4>
-        
         <div class="hrv-item">
             <div class="hrv-title">SDNN <span id="v_sdnn" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>30 ~ 100 ms<br><strong>臨床意義：</strong>總體自律神經調節能力的黃金指標。數值過低通常代表壓力過大、過度疲勞或心血管活力下降。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>30 ~ 100 ms<br><strong>臨床意義：</strong>總體自律神經調節能力的黃金指標。</div>
         </div>
-
         <div class="hrv-item">
             <div class="hrv-title">RMSSD <span id="v_rmssd" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>20 ~ 70 ms<br><strong>臨床意義：</strong>反映副交感神經（迷走神經）活性的心臟保護指標。數值高代表身體放鬆與抗壓能力強；過低代表處於焦慮或戰鬥狀態。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>20 ~ 70 ms<br><strong>臨床意義：</strong>反映副交感神經（迷走神經）活性的心臟保護指標。</div>
         </div>
-
         <div class="hrv-item">
             <div class="hrv-title">pNN50 <span id="v_pnn50" class="hrv-val">--</span><span> (%)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>3% ~ 30%<br><strong>臨床意義：</strong>連續心跳間期差異超過 50ms 的百分比。與 RMSSD 異曲同工，直接對應副交感神經對心臟的即時踩煞車（放鬆）能力。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>3% ~ 30%<br><strong>臨床意義：</strong>連續心跳間期差異超過 50ms 的百分比。</div>
         </div>
-
         <div class="hrv-item">
             <div class="hrv-title">LF <span id="v_lf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>150 ~ 1000 ms²<br><strong>臨床意義：</strong>低頻功率。同時受交感與副交感神經影響，但在短期 5 分鐘量測中，多被視為交感神經（戰或逃反應、血壓調節）的活性指標。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>150 ~ 1000 ms²<br><strong>臨床意義：</strong>多被視為交感神經的活性指標。</div>
         </div>
-
         <div class="hrv-item">
             <div class="hrv-title">HF <span id="v_hf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>100 ~ 800 ms²<br><strong>臨床意義：</strong>高頻功率。完全由副交感神經（呼吸性心律不整）所驅動。數值高代表呼吸深沉、身心和諧；低代表處於發炎或高度緊繃狀態。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>100 ~ 800 ms²<br><strong>臨床意義：</strong>完全由副交感神經所驅動。</div>
         </div>
-
         <div class="hrv-item">
             <div class="hrv-title">LF/HF Ratio <span id="v_lfhf" class="hrv-val">--</span></div>
-            <div class="hrv-desc"><strong>參考範圍：</strong>0.5 ~ 3.0<br><strong>臨床意義：</strong>自律神經平衡度（交感/副交感比例）。比值過高（&gt;3.0）代表交感過度興奮，處於緊張、焦慮或失眠狀態；過低則代表可能過度放鬆或疲倦。</div>
+            <div class="hrv-desc"><strong>參考範圍：</strong>0.5 ~ 3.0<br><strong>臨床意義：</strong>自律神經平衡度。</div>
         </div>
-
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>生理混亂度指標：</strong>健康人通常居中。若數值偏向極高（心律不整風險族群）或極低（心肌缺血風險族群），代表心臟失去適度的隨機調控機制。</div>
+            <div class="hrv-desc"><strong>生理混亂度指標：</strong>健康人通常居中。</div>
         </div>
-        
         <div class="hrv-item">
             <div class="hrv-title" style="color:#00ffff;">Entropy of Entropy (EoE) <span id="v_eoe" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>動態複雜度指標：</strong>自律神經健康的黃金峰值。數值越高，代表心臟應對外界環境變化的動態儲備調節能力越強。</div>
+            <div class="hrv-desc"><strong>動態複雜度指標：</strong>自律神經健康的黃金峰值。</div>
         </div>
     </div>
 
@@ -141,14 +129,14 @@
         let rrHistory = [];
         const totalTargetBeats = 500;    
         
-        // 🛠️ 高精準度濾波變數
+        // 🛠️ 找尋生理最小值的濾波器變數
         let lastPeakTime = 0;
         let localMax = -99999;
         let localMin = 99999;
         let adaptiveThreshold = 0;
         
-        // 🛠️ 儲存畫布上所有紅點 X 座標的陣列 (使其跟隨波形向左移且不消失)
-        let peakXArray = [];
+        // 🛠️ 儲存歷史紅點對應的 greenHistory 索引陣列
+        let peakIndices = [];
 
         const hiddenCanvas = document.createElement('canvas');
         const hiddenCtx = hiddenCanvas.getContext('2d');
@@ -178,8 +166,10 @@
                 reportPanel.style.display = "none"; 
                 rrHistory = []; 
                 greenHistory = [];
-                peakXArray = []; // 清空紅點紀錄
+                peakIndices = []; // 清空紅點
                 lastPeakTime = 0;
+                localMax = -99999;
+                localMin = 99999;
                 isRunning = true;
                 status.innerText = "正在精密記錄 500 下心搏...";
                 drawStaticInvertedU(null, null); 
@@ -227,13 +217,11 @@
                 }
 
                 if (pixelCount > 0) {
-                    // 🛠️ 生理優化取負號：微血管充血反光變暗，取負能讓生理波峰向上對齊
-                    const avgGreen = - (totalGreen / pixelCount);
+                    const avgGreen = totalGreen / pixelCount; // 保持原始數值
                     
-                    // 當陣列滿了，舊數據被推擠出去時，現存的所有紅點 X 座標也必須向左挪移一個間距
+                    // 當陣列滿了要 shift 時，目前所有紅點留存的索引必須全體減 1 
                     if (greenHistory.length >= maxWavePoints) {
-                        const shiftX = 360 / (maxWavePoints - 1);
-                        peakXArray = peakXArray.map(x => x - shiftX).filter(x => x >= 0);
+                        peakIndices = peakIndices.map(idx => idx - 1).filter(idx => idx >= 0);
                     }
                     
                     greenHistory.push(avgGreen);
@@ -241,8 +229,8 @@
                         greenHistory.shift();
                     }
                     
-                    // 🛠️ 呼叫高精度自適應偵測
-                    detectHeartBeatAdvanced(avgGreen);
+                    // 🛠️ 執行優化後的尋找波谷（綠光吸收極大點）演算法
+                    detectValleyAdvanced(avgGreen);
                 }
                 drawWaveform();
                 drawRRChart();
@@ -260,42 +248,42 @@
             requestAnimationFrame(processLoop);
         }
 
-        // 🛠️ 高精度 R-peak 觸發核心演算法
-        function detectHeartBeatAdvanced(currentValue) {
+        // 🛠️ 生理特徵優化演算法：尋找綠光吸收最強點（原始訊號之最小值波谷）
+        function detectValleyAdvanced(currentValue) {
             if (greenHistory.length < 30) return;
             
-            // 1. 動態追蹤波段最大值與最小值
+            // 1. 動態追蹤波段最大與最小值
             if (currentValue > localMax) localMax = currentValue;
             if (currentValue < localMin) localMin = currentValue;
             
-            // 緩慢收斂以應對環境環境光源基底飄移
+            // 緩慢收斂以適應環境光源與受試者呼吸之基底飄移
             localMax -= (localMax - currentValue) * 0.02;
             localMin += (currentValue - localMin) * 0.02;
             
-            // 2. 計算自適應動態觸發門檻 (取 65% 振幅高度)
-            adaptiveThreshold = localMin + (localMax - localMin) * 0.65;
+            // 2. 設定自適應低波谷門檻 (取最低 35% 振幅位置，低於此處代表進入心搏收縮充血區)
+            adaptiveThreshold = localMin + (localMax - localMin) * 0.35;
             
             const now = performance.now();
             
-            // 3. 檢查是否超越門檻
-            if (currentValue > adaptiveThreshold) {
+            // 3. 檢查數值是否低於波谷觸發門檻
+            if (currentValue < adaptiveThreshold) {
                 if (lastPeakTime !== 0) {
                     const rrInterval = now - lastPeakTime;
                     
-                    // 🔒 生理不反應期過濾鎖：健康人類兩下心搏絕對不可能小於 335ms (相當於 >180bpm 雜訊)
+                    // 🔒 生理不反應期過濾鎖：健康人類兩下心跳絕對不可能小於 335ms
                     if (rrInterval >= 335 && rrInterval <= 1500) {
                         
-                        // 4. 一階微分斜率檢查：當下數值開始小於前一 historic 點，確認為局部最高波峰
+                        // 4. 斜率檢驗：當下數值開始大於前一點，確認剛好越過最暗的「局部最低波谷」
                         const prevValue = greenHistory[greenHistory.length - 2];
-                        if (currentValue < prevValue) { 
+                        if (currentValue > prevValue) { 
                             rrHistory.push(rrInterval); 
                             
                             rrValDisplay.innerText = Math.round(rrInterval); 
                             countValDisplay.innerText = rrHistory.length;
                             noiseTxt.innerText = ""; 
 
-                            // 🛠️ 標記紅點：將此時脈搏波尖峰在最右側生成的實體畫布 X 座標 (360) 存入陣列
-                            peakXArray.push(360);
+                            // 🛠️ 紅點標記：將當下最新的最後一個索引記錄進去
+                            peakIndices.push(greenHistory.length - 1);
 
                             lastPeakTime = now;
                         }
@@ -312,7 +300,7 @@
             if (greenHistory.length < 2) return;
             const min = Math.min(...greenHistory); const max = Math.max(...greenHistory); const range = (max - min) || 1;
             
-            // 繪製綠色脈搏連續波形
+            // 繪製綠色原始脈搏波形
             waveCtx.beginPath(); waveCtx.strokeStyle = '#00ff66'; waveCtx.lineWidth = 2;
             for (let i = 0; i < greenHistory.length; i++) {
                 const x = (i / (maxWavePoints - 1)) * w;
@@ -321,12 +309,11 @@
             }
             waveCtx.stroke();
 
-            // 🛠️ 繪製所有留存下來的 R-peak 紅點標記（平滑跟隨滾動且不消失）
-            peakXArray.forEach(peakX => {
-                // 對準當下 X 軸座標位置，並對應其即時波形高度
-                const index = Math.round((peakX / w) * (greenHistory.length - 1));
-                if (index >= 0 && index < greenHistory.length) {
-                    const peakY = h - ((greenHistory[index] - min) / range) * h;
+            // 🛠️ 繪製所有歷史紅點標記：精準黏在對應的波谷像素上，跟隨波形流動
+            peakIndices.forEach(idx => {
+                if (idx >= 0 && idx < greenHistory.length) {
+                    const peakX = (idx / (maxWavePoints - 1)) * w;
+                    const peakY = h - ((greenHistory[idx] - min) / range) * h;
                     
                     waveCtx.beginPath();
                     waveCtx.strokeStyle = '#ff4757'; 
@@ -385,18 +372,15 @@
             }
             uCtx.stroke();
 
-            // 左側：心肌缺血風險族群
             uCtx.fillStyle = 'rgba(255, 71, 87, 0.2)'; uCtx.beginPath(); uCtx.arc(75, 145, 24, 0, 2*Math.PI); uCtx.fill();
             uCtx.fillStyle = '#ff4757'; uCtx.font = 'bold 10px sans-serif'; uCtx.textAlign = "center";
             uCtx.fillText("心肌缺血", 75, 142);
             uCtx.fillText("風險族群", 75, 154);
 
-            // 中間：健康對照組
             uCtx.fillStyle = 'rgba(0, 255, 102, 0.15)'; uCtx.beginPath(); uCtx.arc(190, 65, 32, 0, 2*Math.PI); uCtx.fill();
             uCtx.fillStyle = '#00ff66'; uCtx.font = 'bold 11px sans-serif';
             uCtx.fillText("健康對照組", 190, 68);
 
-            // 右側：心律不整風險族群
             uCtx.fillStyle = 'rgba(255, 165, 2, 0.2)'; uCtx.beginPath(); uCtx.arc(305, 145, 24, 0, 2*Math.PI); uCtx.fill();
             uCtx.fillStyle = '#ffa502'; uCtx.font = 'bold 10px sans-serif';
             uCtx.fillText("心律不整", 305, 142);
