@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>rPPG 臨床級自律神經落點分析儀</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="自律神經分析">
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+    
+    <link rel="icon" type="image/png" sizes="32x32" href="./icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon.png">
+    
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Microsoft JhengHei", sans-serif; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
         h2 { font-size: 1.1rem; margin: 5px 0; text-transform: uppercase; letter-spacing: 1px; }
@@ -87,7 +96,7 @@
         </div>
         <div class="hrv-item">
             <div class="hrv-title">SDNN <span id="v_sdnn" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>總體自律神經調節能力。包含環境光學及血流生理波動（rPPG 修正參考範圍：45 ~ 120 ms。因光學非接觸量測易受微幅晃動與環境光波動干擾，正常基準點較傳統電生理略高）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>總體自律神經調節能力。包含環境光學及血流生理波動（rPPG 修正參考範圍：45 ~ 120 ms。因光學非接觸量測易受微幅晃動與環境光波動干睞，正常基準點較傳統電生理略高）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">RMSSD <span id="v_rmssd" class="hrv-val">--</span><span> (ms)</span></div>
@@ -149,15 +158,13 @@
         let peakIndices = [];
         let activeStream = null;
 
-        // 💡 4階巴特沃斯濾波器記憶狀態變數
         let biquad1_v = [0, 0, 0];
         let biquad2_v = [0, 0, 0];
         let filterCoefs = null; 
-        let estimatedFPS = 30;  // 預設取樣率
+        let estimatedFPS = 30;  
         let frameCount = 0;
         let fpsStartTime = 0;
 
-        // 💡 固定臨床設定範圍：0.3 Hz 到 1.6 Hz
         const FIXED_LOW_CUT = 0.3;
         const FIXED_HIGH_CUT = 1.6;
 
@@ -171,7 +178,6 @@
             ctx.scale(dpr, dpr);
         }
 
-        // 計算巴特沃斯濾波器係數
         function computeButterworthCoefficients(fLow, fHigh, fs) {
             const fLowNorm = fLow / fs;
             const fHighNorm = fHigh / fs;
@@ -440,8 +446,6 @@
             rrCtx.stroke();
         }
 
-        // ====== 🎛️ 臨床級非線性與頻域圖形渲染區塊 ======
-
         function drawStaticInvertedU(myAE, myEoE) {
             const w = 360; const h = 210;
             uCtx.clearRect(0, 0, w, h);
@@ -464,7 +468,6 @@
             uCtx.fillText("EoE", 0, 0);
             uCtx.restore();
 
-            // 💡 座標與動態範圍調優：X軸調整至2.2
             uCtx.textAlign = "center";
             uCtx.fillText("0.0", 35, 188);
             uCtx.fillText("0.5", 35 + 1*70, 188);
@@ -472,7 +475,6 @@
             uCtx.fillText("1.6", 35 + 3*70, 188);
             uCtx.fillText("2.2", 345, 188);
 
-            // 💡 Y軸刻度最大設定為1.4
             uCtx.textAlign = "right";
             uCtx.fillText("0.0", 30, 175);
             uCtx.fillText("0.3", 30, 175 - 1*34);
@@ -532,7 +534,6 @@
             }
         }
 
-        // 💡 臨床重疊移動視窗非線性演算法：17微觀點, 55振幅格, 5層結構, 步長=1
         function calculateAE_EoE(filteredRR) {
             const N = filteredRR.length;
             const tau = 17; 
@@ -559,10 +560,10 @@
             }
             
             let ae = y_tau.reduce((a, b) => a + b, 0) / y_tau.length;
-            if (ae > 0.3) ae = ae * 0.92; // 臨床物理性光學環境降噪修正
+            if (ae > 0.3) ae = ae * 0.92; 
             
             const s2 = 5; 
-            const yMax = Math.log(tau); // ln(17) ≒ 2.833
+            const yMax = Math.log(tau); 
             const levelWidth = yMax / s2;
             let levelCounts = new Array(s2).fill(0);
             y_tau.forEach(val => {
@@ -576,7 +577,6 @@
             return { ae: ae, eoe: eoe };
         }
 
-        // 💡 臨床生理指標核心運算
         function calculateHRVMetrics() {
             const filteredRR = rrHistory.filter(val => val >= 300 && val <= 1600);
             const N = filteredRR.length;
@@ -599,7 +599,6 @@
             }
             const rmssd = Math.sqrt(diffSumSq / (N - 1)); const pnn50 = (nn50Count / (N - 1)) * 100;
             
-            // 標準化頻率功率分配轉換 (nu)
             const estimatedHF = Math.pow(rmssd, 2) * 0.5; 
             const totalPower = Math.pow(sdnn, 2) * 0.8;
             let estimatedLF = totalPower - estimatedHF; 
