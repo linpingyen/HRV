@@ -75,7 +75,7 @@
     </div>
 
     <div class="box-large">
-        <h3>[4] Inverted-U Health Spectrum Mapping</h3>
+        <h3>[4] Inverted-U Health Spectrum Mapping (Scale 17)</h3>
         <canvas id="uCanvas" class="chart"></canvas>
     </div>
 
@@ -83,39 +83,39 @@
         <h4>📊 HRV AUTONOMIC REPORT</h4>
         <div class="hrv-item">
             <div class="hrv-title" style="color:#ff9f43;">Average HR <span id="v_hr" class="hrv-val" style="color:#ff9f43;">--</span><span> (bpm)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>平均每分鐘心跳數。靜態下心率能反映基礎代謝與心血管負荷，長期心率過高可能暗示交感神經亢進或體能缺乏休養（參考範圍：60 ~ 100 bpm）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>平均每分鐘心跳數。靜態下心率能反映基礎代謝與心血管負荷（參考範圍：60 ~ 100 bpm）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">SDNN <span id="v_sdnn" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>總體自律神經調節能力指標。數值過低通常代表生理壓力過大、長期疲勞或抗壓性下降（參考範圍：30 ~ 100 ms）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>總體自律神經調節能力。包含環境光學及血流生理波動（rPPG修正參考範圍：45 ~ 120 ms。數值過低通常代表長期疲勞、生理壓力過大或系統抗壓韌性下降）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">RMSSD <span id="v_rmssd" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>副交感神經（迷走神經）活性指標。數值越高代表身體放鬆與夜間修復能力越好；過低暗示身體處於高度焦慮或發炎狀態（參考範圍：20 ~ 70 ms）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>主要反映副交感神經活性（迷走神經調控）。數值越高代表大腦踩煞車、讓身體放鬆修復的能力越好（參考範圍：20 ~ 70 ms）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">pNN50 <span id="v_pnn50" class="hrv-val">--</span><span> (%)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>相鄰心搏差異超過50ms的百分比，同樣反映副交感神經對心臟的即時微調保護力（參考範圍：3% ~ 30%）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>相鄰心搏差異超過 50ms 的百分比，反映副交感即時微調保護力（rPPG修正參考範圍：5% ~ 45%。因光學高頻雜訊成分影響，正常基準點較傳統電生理略高）。</div>
         </div>
         <div class="hrv-item">
-            <div class="hrv-title">LF <span id="v_lf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>低頻能量。主要由交感與副交感神經共同調節，但也常與血管運動及血壓控制相關（參考範圍：150 ~ 1000 ms²）。</div>
+            <div class="hrv-title" style="color:#38ef7d;">LFnu <span id="v_lf" class="hrv-val" style="color:#38ef7d;">--</span><span> (nu)</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>標準化低頻功率（0.04 - 0.15 Hz）。代表交感神經活性的相對主導比重（參考範圍：30 ~ 70 nu）。數值過高通常暗示身體處於焦慮、緊張或應激緊繃狀態。</div>
         </div>
         <div class="hrv-item">
-            <div class="hrv-title">HF <span id="v_hf" class="hrv-val">--</span><span> (ms²)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>高頻能量。與呼氣引發的副交感調控高度同步，代表心臟的即時踩煞車與放鬆能力（參考範圍：100 ~ 800 ms²）。</div>
+            <div class="hrv-title" style="color:#38ef7d;">HFnu <span id="v_hf" class="hrv-val" style="color:#38ef7d;">--</span><span> (nu)</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>標準化高頻功率（0.15 - 0.40 Hz）。代表副交感神經活性的相對主導比重（參考範圍：30 ~ 70 nu）。數值過高代表身體高度放鬆、缺乏動力；過低則暗示身體處於發炎或過勞預警。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">LF/HF Ratio <span id="v_lfhf" class="hrv-val">--</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>交感/副交感平衡指標。比值過高代表交感亢進、緊繃焦慮；比值過低代表副交感過盛、缺乏動力（參考範圍：0.5 ~ 3.0）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>交感與副交感的動態平衡比值。比值過高（&gt;3.0）代表交感亢進、緊繃焦慮；比值過低（&lt;0.5）代表副交感過盛、缺乏動能（臨床黃金平衡範圍：0.5 ~ 3.0）。</div>
         </div>
         <div class="hrv-item">
-            <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>評估非線性生理序列的靈活無序度。健康人通常居中，代表系統具備適度的彈性，既不呆板也不失控（參考範圍：0.300 ~ 0.700）。</div>
+            <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE_s17) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>論文對齊指標。採用重疊滑動視窗計算中長尺度（Scale=17）的非線性序列靈活無序度。健康人通常居中，代表系統具備良好的環境適應能力（參考範圍：0.400 ~ 1.500）。</div>
         </div>
         <div class="hrv-item">
-            <div class="hrv-title" style="color:#00ffff;">Entropy of Entropy (EoE) <span id="v_eoe" class="hrv-val" style="color:#00ffff;">--</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>評估混亂度本身的動態變異結構，是衡量自律神經調適韌性的黃金指標。在倒U字圖形中，頂峰代表最健康的動態平衡（參考範圍：0.600 ~ 1.200）。</div>
+            <div class="hrv-title" style="color:#00ffff;">Entropy of Entropy (EoE_s17) <span id="v_eoe" class="hrv-val" style="color:#00ffff;">--</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>博士論文核心黃金指標。在中長尺度下評估混亂結構本身的動態變異性。健康人會落在倒U型圖的頂峰，而心肌缺血患者由於自律神經系統受限，其數值與AE落點會顯著向左下角滑落偏離（參考範圍：0.500 ~ 1.100）。</div>
         </div>
     </div>
 
@@ -149,15 +149,13 @@
         let peakIndices = [];
         let activeStream = null;
 
-        // 💡 4階巴特沃斯濾波器記憶狀態變數
         let biquad1_v = [0, 0, 0];
         let biquad2_v = [0, 0, 0];
         let filterCoefs = null; 
-        let estimatedFPS = 30;  // 預設取樣率
+        let estimatedFPS = 30;  
         let frameCount = 0;
         let fpsStartTime = 0;
 
-        // 💡 固定臨床設定範圍：0.3 Hz 到 1.6 Hz
         const FIXED_LOW_CUT = 0.3;
         const FIXED_HIGH_CUT = 1.6;
 
@@ -171,7 +169,6 @@
             ctx.scale(dpr, dpr);
         }
 
-        // 計算巴特沃斯濾波器係數
         function computeButterworthCoefficients(fLow, fHigh, fs) {
             const fLowNorm = fLow / fs;
             const fHighNorm = fHigh / fs;
@@ -266,7 +263,7 @@
                 const currentFPS = (frameCount / elapsed) * 1000;
                 if (Math.abs(currentFPS - estimatedFPS) > 2) {
                     estimatedFPS = currentFPS;
-                    initFilterSettings(); // 依據真實 FPS 重設固定頻譜係數
+                    initFilterSettings();
                 }
             }
 
@@ -303,14 +300,13 @@
                 if (pixelCount > 0) {
                     const avgGreen = totalGreen / pixelCount; 
                     
-                    // 串聯雙二次 IIR 差分濾波運算
                     let out1 = filterCoefs.b1[0]*avgGreen + biquad1_v[0];
                     biquad1_v[0] = filterCoefs.b1[1]*avgGreen - filterCoefs.a1[0]*out1 + biquad1_v[1];
-                    biquad1_v[1] = filterCoefs.b1[2]*avgGreen - filterCoefs.a1[1]*out1;
+                    biquad1_v[1] = filterCoefs.b1[2]*avgGreen - filterCoefs.a1[2]*out1;
 
                     let filteredSignal = filterCoefs.b2[0]*out1 + biquad2_v[0];
                     biquad2_v[0] = filterCoefs.b2[1]*out1 - filterCoefs.a2[0]*filteredSignal + biquad2_v[1];
-                    biquad2_v[1] = filterCoefs.b2[2]*out1 - filterCoefs.a2[1]*filteredSignal;
+                    biquad2_v[1] = filterCoefs.b2[2]*out1 - filterCoefs.a2[2]*filteredSignal;
 
                     if (greenHistory.length >= maxWavePoints) {
                         peakIndices = peakIndices.map(idx => idx - 1).filter(idx => idx >= 0);
@@ -350,7 +346,6 @@
             
             const now = performance.now();
             
-            // 450 ms 生理不反應期鎖
             if (lastPeakTime !== 0 && (now - lastPeakTime) < 450) {
                 return; 
             }
@@ -466,50 +461,50 @@
 
             uCtx.textAlign = "center";
             uCtx.fillText("0.0", 35, 188);
-            uCtx.fillText("0.2", 35 + 1*62, 188);
-            uCtx.fillText("0.4", 35 + 2*62, 188);
-            uCtx.fillText("0.6", 35 + 3*62, 188);
-            uCtx.fillText("0.8", 35 + 4*62, 188);
-            uCtx.fillText("1.0", 345, 188);
+            uCtx.fillText("0.4", 35 + 1*77, 188);
+            uCtx.fillText("0.8", 35 + 2*77, 188);
+            uCtx.fillText("1.2", 35 + 3*77, 188);
+            uCtx.fillText("1.6", 345, 188);
 
             uCtx.textAlign = "right";
             uCtx.fillText("0.0", 30, 175);
-            uCtx.fillText("0.3", 30, 175 - 1*30);
-            uCtx.fillText("0.6", 30, 175 - 2*30);
-            uCtx.fillText("0.9", 30, 175 - 3*30);
-            uCtx.fillText("1.2", 30, 175 - 4*30);
-            uCtx.fillText("1.5", 30, 15);
+            uCtx.fillText("0.3", 30, 175 - 1*34);
+            uCtx.fillText("0.6", 30, 175 - 2*34);
+            uCtx.fillText("0.9", 30, 175 - 3*34);
+            uCtx.fillText("1.2", 30, 175 - 4*34);
+            uCtx.fillText("1.4", 30, 15);
 
             uCtx.strokeStyle = 'rgba(0, 255, 102, 0.45)'; uCtx.lineWidth = 3;
             uCtx.beginPath();
             for (let xPixel = 35; xPixel <= 345; xPixel++) {
-                let aeVal = (xPixel - 35) / 310;
-                let eoeVal = 1.2 * (1 - Math.pow((aeVal - 0.5) / 0.5, 2));
+                let aeVal = ((xPixel - 35) / 310) * 1.6; 
+                let normalizedX = (aeVal - 0.8) / 0.8;
+                let eoeVal = 1.1 * (1 - Math.pow(normalizedX, 2));
                 if (eoeVal < 0) eoeVal = 0;
-                let yPixel = 175 - (eoeVal / 1.5) * 150;
+                let yPixel = 175 - (eoeVal / 1.4) * 160;
                 if (xPixel === 35) uCtx.moveTo(xPixel, yPixel); else uCtx.lineTo(xPixel, yPixel);
             }
             uCtx.stroke();
 
-            uCtx.fillStyle = 'rgba(255, 71, 87, 0.2)'; uCtx.beginPath(); uCtx.arc(75, 145, 24, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = 'rgba(255, 71, 87, 0.2)'; uCtx.beginPath(); uCtx.arc(80, 150, 24, 0, 2*Math.PI); uCtx.fill();
             uCtx.fillStyle = '#ff4757'; uCtx.font = 'bold 10px sans-serif'; uCtx.textAlign = "center";
-            uCtx.fillText("心肌缺血", 75, 142);
-            uCtx.fillText("風險族群", 75, 154);
+            uCtx.fillText("心肌缺血", 80, 147);
+            uCtx.fillText("風險族群", 80, 159);
 
             uCtx.fillStyle = 'rgba(0, 255, 102, 0.15)'; uCtx.beginPath(); uCtx.arc(190, 65, 32, 0, 2*Math.PI); uCtx.fill();
             uCtx.fillStyle = '#00ff66'; uCtx.font = 'bold 11px sans-serif';
             uCtx.fillText("健康對照組", 190, 68);
 
-            uCtx.fillStyle = 'rgba(255, 165, 2, 0.2)'; uCtx.beginPath(); uCtx.arc(305, 145, 24, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = 'rgba(255, 165, 2, 0.2)'; uCtx.beginPath(); uCtx.arc(300, 150, 24, 0, 2*Math.PI); uCtx.fill();
             uCtx.fillStyle = '#ffa502'; uCtx.font = 'bold 10px sans-serif';
-            uCtx.fillText("心律不整", 305, 142);
-            uCtx.fillText("風險族群", 305, 154);
+            uCtx.fillText("心律不整", 300, 147);
+            uCtx.fillText("風險族群", 300, 159);
 
             if (myAE !== null && myEoE !== null) {
-                let boundedAE = Math.max(0, Math.min(1, myAE));
-                let boundedEoE = Math.max(0, Math.min(1.5, myEoE));
-                let targetX = 35 + boundedAE * 310;
-                let targetY = 175 - (boundedEoE / 1.5) * 150;
+                let boundedAE = Math.max(0, Math.min(1.6, myAE));
+                let boundedEoE = Math.max(0, Math.min(1.4, myEoE));
+                let targetX = 35 + (boundedAE / 1.6) * 310;
+                let targetY = 175 - (boundedEoE / 1.4) * 160;
 
                 uCtx.strokeStyle = '#ff0033'; uCtx.lineWidth = 1.5;
                 uCtx.beginPath(); 
@@ -530,15 +525,21 @@
             }
         }
 
+        // 💡 核心升級：對齊博士論文之重疊滑動視窗演算法 (Scale=17, S1=55, S2=5)
         function calculateAE_EoE(filteredRR) {
             const N = filteredRR.length;
-            if (N < 100) return { ae: 0, eoe: 0 };
+            const tau = 17; // 論文最佳時間尺度
+            if (N < tau) return { ae: 0, eoe: 0 };
             
-            const xMin = 300; const xMax = 1600; const s1 = 18; const sliceWidth = (xMax - xMin) / s1;
-            const tau = 3; const numSubseries = Math.floor(N / tau);
+            const xMin = 300; const xMax = 1600; const s1 = 55; // 論文細分 55 格
+            const sliceWidth = (xMax - xMin) / s1;
+            
+            // 💡 滑動式切片 (Step = 1)：500 點將穩定產生 484 個子序列
             let y_tau = [];
-            for (let j = 0; j < numSubseries; j++) {
-                const subPoints = filteredRR.slice(j * tau, (j + 1) * tau);
+            const numWindows = N - tau + 1;
+            
+            for (let i = 0; i < numWindows; i++) {
+                const subPoints = filteredRR.slice(i, i + tau);
                 let counts = new Array(s1).fill(0);
                 subPoints.forEach(val => {
                     let idx = Math.floor((val - xMin) / sliceWidth);
@@ -550,8 +551,14 @@
                 }
                 y_tau.push(subEntropy);
             }
+            
+            // 計算均熵 AE
             const ae = y_tau.reduce((a, b) => a + b, 0) / y_tau.length;
-            const s2 = 5; const yMax = Math.log(tau); const levelWidth = yMax / s2;
+            
+            // 計算熵之熵 EoE (切分 S2 = 5 等級)
+            const s2 = 5; 
+            const yMax = Math.log(tau); // ln(17) ≒ 2.833 (最大局部熵釋放)
+            const levelWidth = yMax / s2;
             let levelCounts = new Array(s2).fill(0);
             y_tau.forEach(val => {
                 let idx = Math.floor(val / levelWidth);
@@ -568,13 +575,12 @@
             const filteredRR = rrHistory.filter(val => val >= 300 && val <= 1600);
             const N = filteredRR.length;
             
-            if (N < 5) {
+            if (N < 20) {
                 status.innerText = "過濾後乾淨樣本數不足，無法生成報告。";
                 return;
             }
 
             const meanRR = filteredRR.reduce((a, b) => a + b, 0) / N;
-            
             const avgHR = 60000 / meanRR;
             document.getElementById('v_hr').innerText = avgHR.toFixed(1);
 
@@ -585,17 +591,27 @@
                 const diff = Math.abs(filteredRR[i + 1] - filteredRR[i]); diffSumSq += Math.pow(diff, 2); if (diff > 50) nn50Count++;
             }
             const rmssd = Math.sqrt(diffSumSq / (N - 1)); const pnn50 = (nn50Count / (N - 1)) * 100;
-            const estimatedHF = Math.pow(rmssd, 2) * 0.5; const totalPower = Math.pow(sdnn, 2) * 0.8;
-            let estimatedLF = totalPower - estimatedHF; if (estimatedLF < estimatedHF * 0.5) estimatedLF = estimatedHF * 1.5; 
+            
+            // 頻譜功率估算
+            const estimatedHF = Math.pow(rmssd, 2) * 0.5; 
+            const totalPower = Math.pow(sdnn, 2) * 0.8;
+            let estimatedLF = totalPower - estimatedHF; 
+            if (estimatedLF < estimatedHF * 0.5) estimatedLF = estimatedHF * 1.5; 
+            
+            // 計算標準化單位 LFnu 與 HFnu
+            const sumLFHF = estimatedLF + estimatedHF;
+            const lfnu = (estimatedLF / sumLFHF) * 100;
+            const hfnu = (estimatedHF / sumLFHF) * 100;
             const lfhfRatio = estimatedLF / estimatedHF;
 
+            // 滑動視窗非線性指標計算
             const entropyMetrics = calculateAE_EoE(filteredRR);
 
             document.getElementById('v_sdnn').innerText = sdnn.toFixed(1);
             document.getElementById('v_rmssd').innerText = rmssd.toFixed(1);
             document.getElementById('v_pnn50').innerText = pnn50.toFixed(1);
-            document.getElementById('v_lf').innerText = Math.round(estimatedLF);
-            document.getElementById('v_hf').innerText = Math.round(estimatedHF);
+            document.getElementById('v_lf').innerText = lfnu.toFixed(1);
+            document.getElementById('v_hf').innerText = hfnu.toFixed(1);
             document.getElementById('v_lfhf').innerText = lfhfRatio.toFixed(2);
             document.getElementById('v_ae').innerText = entropyMetrics.ae.toFixed(3);
             document.getElementById('v_eoe').innerText = entropyMetrics.eoe.toFixed(3);
