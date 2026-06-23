@@ -96,7 +96,7 @@
         </div>
         <div class="hrv-item">
             <div class="hrv-title">SDNN <span id="v_sdnn" class="hrv-val">--</span><span> (ms)</span></div>
-            <div class="hrv-desc"><strong>臨床解釋：</strong>總體自律神經調節能力。包含環境光學及血流生理波動（rPPG 修正參考範圍：45 ~ 120 ms。因光學非接觸量測易受微幅晃動與環境光波動干睞，正常基準點較傳統電生理略高）。</div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>總體自律神經調節能力。包含環境光學及血流生理波動（rPPG 修正參考範圍：45 ~ 120 ms。因光學非接觸量測易受微幅晃動與環境光波動干擾，正常基準點較傳統電生理略高）。</div>
         </div>
         <div class="hrv-item">
             <div class="hrv-title">RMSSD <span id="v_rmssd" class="hrv-val">--</span><span> (ms)</span></div>
@@ -560,7 +560,11 @@
             }
             
             let ae = y_tau.reduce((a, b) => a + b, 0) / y_tau.length;
-            if (ae > 0.3) ae = ae * 0.92; 
+            
+            // ─── AE 數值再打八折邏輯修正 ───
+            if (ae > 0.3) {
+                ae = ae * 0.736; // 原 0.92 再打八折 (0.92 * 0.8 = 0.736)
+            }
             
             const s2 = 5; 
             const yMax = Math.log(tau); 
