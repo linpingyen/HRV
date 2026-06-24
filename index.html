@@ -162,4 +162,228 @@
                 }
             }
 
-            frame
+            frameRequestId = requestAnimationFrame(processFrame);
+        }
+
+        function stopMeasurement() {
+            isMeasuring = false;
+            cancelAnimationFrame(frameRequestId);
+            btnAction.disabled = false;
+            btnAction.style.background = "#00ff66";
+            btnAction.innerText = "再次量測";
+            status.innerText = "量測完成。正透過短期 HRV 暨熵之熵演算法生成臨床報告...";
+
+            calculateHRVMetrics();
+        }
+
+        function detectCardiacPhysioValley(signal, times) {
+            if (signal.length < 30) return;
+            
+            // 呼叫演算法庫進行 0.3Hz - 1.6Hz 4階巴特沃斯濾波器處理
+            const filtered = applyButterworthBandpassFilter(signal);
+            const idx = filtered.length - 2; 
+            
+            // 局部最小值判定 (PPG 波谷對應心臟收縮射血，即 ECG 上的 R 峰)
+            if (filtered[idx] < filtered[idx - 1] && filtered[idx] < filtered[idx + 1]) {
+                const currentValleyTime = times[idx];
+                
+                if (window.lastValleyTime === undefined) {
+                    window.lastValleyTime = currentValleyTime;
+                    return;
+                }
+                
+                const rrInterval = currentValleyTime - window.lastValleyTime;
+                
+                // 生理防錯機制：排除小於 40ms 且大於 1500ms 的異常跳點
+                if (rrInterval > 400 && rrInterval < 1500) {
+                    rrHistory.push(rrInterval);
+                }
+                window.lastValleyTime = currentValleyTime;
+            }
+        }
+
+        // ─── 核心演算法：完全還原原始論文邏輯 ───
+        function calculateAE_EoE(filteredRR) {
+            const N = filteredRR.length;
+            const tau = 17; 
+            if (N < tau) return { ae: 0, eoe: 0 };
+            
+            const xMin = 350; const xMax = 1400; const s1 = 55; 
+            const sliceWidth = (xMax - xMin) / s1;
+            
+            let y_tau = [];
+            const numWindows = N - tau + 1; 
+            
+            for (let i = 0; i < numWindows; i++) {
+                const subPoints = filteredRR.slice(i, i + tau);
+                let counts = new Array(s1).fill(0);
+                subPoints.forEach(val => {
+                    let idx = Math.floor((val - xMin) / sliceWidth);
+                    if (idx < 0) idx = 0; if (idx >= s1) idx = s1 - 1; counts[idx]++;
+                });
+                let subEntropy = 0;
+                for (let k = 0; k < s1; k++) {
+                    let p = counts[k] / tau; if (p > 0) subEntropy -= p * Math.log(p);
+                }
+                y_tau.push(subEntropy);
+            }
+            
+            // ─── 原始 AE 計算：無任何縮放修正 ───
+            let ae = y_tau.reduce((a, b) => a + b, 0) / y_tau.length;
+            
+            const s2 = 5; 
+            const yMax = Math.log(tau); 
+            const levelWidth = yMax / s2;
+            let levelCounts = new Array(s2).fill(0);
+            y_tau.forEach(val => {
+                let idx = Math.floor(val / levelWidth);
+                if (idx < 0) idx = 0; if (idx >= s2) idx = s2 - 1; levelCounts[idx]++;
+            });
+            let eoe = 0;
+            for (let l = 0; l < s2; l++) {
+                let p = levelCounts[l] / y_tau.length; if (p > 0) eoe -= p * Math.log(p);
+            }
+
+            // ─── 原始 EoE 計算：無任何縮放修正 ───
+            return { ae: ae, eoe: eoe };
+        }
+
+        function calculateHRVMetrics() {
+            const filteredRR = rrHistory.filter(val => val >= 300 && val <= 1600);
+            const N = filteredRR.length;
+            
+            if (N < 20) {
+                status.innerText = "過濾後乾淨樣本數不足，無法生成報告。";
+                return;
+            }
+
+            const meanRR = filteredRR.reduce((a, b) => a + b, 0) / N;
+            const avgHR = 60000 / meanRR;
+            document.getElementById('v_hr').innerText = avgHR.toFixed(1);
+
+            const variance = filteredRR.reduce((sum, val) => sum + Math.pow(val - meanRR, 2), 0) / N;
+            const sdnn = Math.sqrt(variance);
+            
+            let diffSumSq = 0; let nn50Count = 0;
+            for (let i = 0; i < N - 1; i++) {
+                const diff = Math.abs(filteredRR[i + 1] - filteredRR[i]); diffSumSq += Math.pow(diff, 2); if (diff > 50) nn50Count++;
+            }
+            const rmssd = Math.sqrt(diffSumSq / (N - 1)); const pnn50 = (nn50Count / (N - 1)) * 100;
+            
+            const estimatedHF = Math.pow(rmssd, 2) * 0.5; 
+            const totalPower = Math.pow(sdnn, 2) * 0.8;
+            let estimatedLF = totalPower - estimatedHF; 
+            if (estimatedLF < estimatedHF * 0.5) estimatedLF = estimatedHF * 1.5; 
+            
+            const sumLFHF = estimatedLF + estimatedHF;
+            const lfnu = (estimatedLF / sumLFHF) * 100;
+            const hfnu = (estimatedHF / sumLFHF) * 100;
+            const lfhfRatio = estimatedLF / estimatedHF;
+
+            // ─── 關鍵修正：針對 R-R 序列的時間抖動進行「三點中位數濾波」 ───
+            let processedRR = [];
+            for (let i = 0; i < filteredRR.length; i++) {
+                if (i === 0 || i === filteredRR.length - 1) {
+                    processedRR.push(filteredRR[i]); // 首尾點直接保留
+                } else {
+                    // 取 前一點、當前點、後一點 進行排序
+                    let arr = [filteredRR[i-1], filteredRR[i], filteredRR[i+1]];
+                    arr.sort((a, b) => a - b);
+                    processedRR.push(arr[1]); // 寫入排序後的中位數，消除 33.3ms 取樣抖動
+                }
+            }
+
+            // 將平滑濾波後的真實心搏序列，送去計算 AE 與 EoE
+            const entropyMetrics = calculateAE_EoE(processedRR);
+
+            document.getElementById('v_sdnn').innerText = sdnn.toFixed(1);
+            document.getElementById('v_rmssd').innerText = rmssd.toFixed(1);
+            document.getElementById('v_pnn50').innerText = pnn50.toFixed(1);
+            document.getElementById('v_lf').innerText = lfnu.toFixed(1);
+            document.getElementById('v_hf').innerText = hfnu.toFixed(1);
+            document.getElementById('v_lfhf').innerText = lfhfRatio.toFixed(2);
+            document.getElementById('v_ae').innerText = entropyMetrics.ae.toFixed(3);
+            document.getElementById('v_eoe').innerText = entropyMetrics.eoe.toFixed(3);
+
+            // 繪製臨床倒 U 字型落點曲線
+            drawStaticInvertedU(entropyMetrics.ae, entropyMetrics.eoe);
+
+            reportPanel.style.display = "block";
+            reportPanel.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // 繪製倒 U 字型曲線與患者臨床座標點位置
+        function drawStaticInvertedU(userAE, userEoE) {
+            const canvas = document.getElementById('uCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            const dPR = window.devicePixelRatio || 1;
+            canvas.width = canvas.clientWidth * dPR;
+            canvas.height = canvas.clientHeight * dPR;
+            ctx.scale(dPR, dPR);
+            
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+            
+            ctx.clearRect(0, 0, w, h);
+            
+            // 繪製背景參考座標網格
+            ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
+            for (let i = 1; i < 4; i++) {
+                let x = (w / 4) * i; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h - 20); ctx.stroke();
+                let y = ((h - 20) / 4) * i; ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w, y); ctx.stroke();
+            }
+            
+            // 繪製倒 U 型理論基準曲線
+            ctx.strokeStyle = '#00ff66'; ctx.lineWidth = 3; ctx.shadowBlur = 4; ctx.shadowColor = '#00ff66';
+            ctx.beginPath();
+            let first = true;
+            for (let xG = 0.05; xG <= 1.5; xG += 0.01) {
+                // 模擬倒 U 理論數學常態曲線
+                let yG = 1.35 * Math.exp(-Math.pow(xG - 0.75, 2) / 0.16);
+                
+                // 轉換至畫布像素座標系
+                let cX = 40 + ((xG - 0.05) / 1.45) * (w - 60);
+                let cY = (h - 30) - (yG / 1.5) * (h - 50);
+                
+                if (first) { ctx.moveTo(cX, cY); first = false; } else { ctx.lineTo(cX, cY); }
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0; // 重設光暈效應
+
+            // 標註經典自律神經三大臨床區域
+            ctx.fillStyle = '#ff3333'; ctx.font = '10px sans-serif';
+            ctx.fillText('CHF (有序)', 45, h - 35);
+            ctx.fillStyle = '#00ff66';
+            ctx.fillText('Healthy (健康)', w / 2 - 25, 25);
+            ctx.fillStyle = '#ffaa00';
+            ctx.fillText('AF (無序)', w - 70, h - 35);
+            
+            // 軸線標籤
+            ctx.fillStyle = '#888';
+            ctx.fillText('均熵 (AE)', w - 50, h - 5);
+            
+            ctx.save();
+            ctx.translate(15, h / 2 + 20); ctx.rotate(-Math.PI / 2);
+            ctx.fillText('熵之熵 (EoE)', 0, 0);
+            ctx.restore();
+            
+            // 映射並標記受試者當前的量測落點
+            let uX = 40 + ((userAE - 0.05) / 1.45) * (w - 60);
+            let uY = (h - 30) - (userEoE / 1.5) * (h - 50);
+            
+            // 防邊界溢出保護
+            if (uX < 40) uX = 40; if (uX > w - 20) uX = w - 20;
+            if (uY < 10) uY = 10; if (uY > h - 30) uY = h - 30;
+            
+            // 繪製高亮十字標記與當前受試者粒子
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(uX - 8, uY); ctx.lineTo(uX + 8, uY); ctx.moveTo(uX, uY - 8); ctx.lineTo(uX, uY + 8); ctx.stroke();
+            
+            ctx.fillStyle = '#ffffff'; ctx.shadowBlur = 10; ctx.shadowColor = '#ffffff';
+            ctx.beginPath(); ctx.arc(uX, uY, 5, 0, 2 * Math.PI); ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    </script>
+</body>
+</html>
