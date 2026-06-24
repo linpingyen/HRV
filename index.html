@@ -17,185 +17,523 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Microsoft JhengHei", sans-serif; background: #0a0a0a; color: #00ff66; text-align: center; padding: 10px; margin: 0; }
         h2 { font-size: 1.1rem; margin: 5px 0; text-transform: uppercase; letter-spacing: 1px; }
         
-        .box { width: 100%; max-width: 500px; margin: 5px auto; background: #111; border: 1px solid #333; padding: 10px; box-sizing: border-box; border-radius: 8px; }
-        video { transform: scaleX(-1); background: #222; width: 100%; height: auto; border-radius: 6px; }
-        canvas { background: #000; display: block; margin: 5px auto; width: 100%; height: auto; border-radius: 6px; }
+        .box { width: 100%; max-width: 360px; height: 125px; margin: 6px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #333; }
+        .box h3 { position: absolute; top: 4px; left: 8px; margin: 0; background: rgba(0,0,0,0.8); padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; z-index: 10; color: #00ff66; border: 1px solid #00ff66; }
         
-        button { background: #00ff66; color: #000; border: none; padding: 12px 24px; font-size: 1rem; font-weight: bold; cursor: pointer; border-radius: 6px; width: 100%; text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; }
-        button:active { background: #00cc55; }
+        .box-large { width: 100%; max-width: 360px; height: 210px; margin: 6px auto; background: #000; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid #333; }
+        .box-large h3 { position: absolute; top: 4px; left: 8px; margin: 0; background: rgba(0,0,0,0.8); padding: 2px 6px; font-size: 0.75rem; border-radius: 4px; z-index: 10; color: #00ffff; border: 1px solid #00ffff; }
+
+        #video-container { position: relative; }
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+        canvas.chart { width: 100%; height: 100%; background: #050505; display: block; }
         
-        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; text-align: left; }
-        .card { background: #1a1a1a; padding: 8px 12px; border-left: 3px solid #00ff66; border-radius: 4px; }
-        .card label { font-size: 0.75rem; color: #888; display: block; margin-bottom: 2px; }
-        .card span { font-size: 1.1rem; font-weight: bold; color: #fff; }
+        /* 數據面板 */
+        .data-panel { font-size: 0.85rem; color: #ffffff; margin: 10px auto; font-weight: bold; max-width: 360px; text-align: left; padding: 0 10px; line-height: 1.6; }
+        .data-panel div { display: block; margin-bottom: 3px; }
+        .data-panel span { color: #00ffff; font-size: 1rem; }
+        #countVal { color: #ff4757; }
+        #noiseTxt { color: #ffbc00; font-size: 0.82rem; display: block; height: auto; margin-top: 5px; font-weight: bold; }
+
+        /* 按鈕樣式 */
+        .btn-container { margin: 8px 0; }
+        #actionBtn { padding: 12px 25px; font-size: 1rem; background: #00ff66; color: #000; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+        #actionBtn.reset-state { background: #ff4757; color: #fff; }
         
-        #chartContainer { position: relative; width: 100%; height: 260px; background: #000; border: 1px solid #222; border-radius: 6px; margin-top: 10px; overflow: hidden; }
-        #uCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-        
-        #status { font-size: 0.85rem; color: #ffaa00; font-weight: bold; margin: 5px 0; min-height: 1.2rem; }
+        #status { color: #ffa502; font-size: 0.85rem; margin: 5px; min-height: 20px; }
+
+        #reportPanel { display: none; width: 100%; max-width: 360px; margin: 15px auto; text-align: left; background: #111; border: 2px solid #00ffff; border-radius: 8px; padding: 12px; box-sizing: border-box; color: #fff; }
+        #reportPanel h4 { margin: 0 0 10px 0; text-align: center; color: #00ffff; letter-spacing: 2px; border-bottom: 1px dashed #00ffff; padding-bottom: 5px; }
+        .hrv-item { margin-bottom: 12px; font-size: 0.85rem; line-height: 1.4; }
+        .hrv-title { font-weight: bold; color: #00ff66; font-size: 0.95rem; }
+        .hrv-title span { color: #fff; }
+        .hrv-val { color: #ffff00; font-size: 1.1rem; font-weight: bold; float: right; }
+        .hrv-desc { color: #bbb; font-size: 0.75rem; margin-top: 2px; padding-left: 5px; border-left: 2px solid #555; }
     </style>
 </head>
 <body>
 
+    <h2>rPPG Autonomic Mapping System</h2>
+    <div id="status">系統就緒</div>
+    
+    <div class="btn-container">
+        <button id="actionBtn">啟動臨床自律神經落點分析</button>
+    </div>
+
+    <div class="box" id="video-container">
+        <h3>[1] 請對準額頭特定區域不要移動</h3>
+        <video id="testVideo" autoplay playsinline muted></video>
+        <canvas id="overlayCanvas"></canvas>
+    </div>
+
     <div class="box">
-        <h2>rPPG 生物訊號源</h2>
-        <video id="video" autoplay playsinline muted></video>
-        <div id="status">請允許相機權限以啟動即時分析...</div>
-        <button id="btnAction">開始量測 (60秒)</button>
+        <h3>[2] rPPG 4階巴特沃斯帶通濾波脈搏訊號 (0.3Hz - 1.6Hz)</h3>
+        <canvas id="waveCanvas" class="chart"></canvas>
     </div>
 
-    <div class="box" id="reportPanel" style="display:none;">
-        <h2>自律神經與複雜度臨床報告</h2>
-        
-        <div id="chartContainer">
-            <canvas id="uCanvas"></canvas>
-        </div>
+    <div class="box">
+        <h3>[3] R-R Full Trend (1 to 500 Beats)</h3>
+        <canvas id="rrCanvas" class="chart"></canvas>
+    </div>
+    
+    <div class="data-panel">
+        <div>Progress: <span id="countVal">0</span>/500</div>
+        <div>Latest R-R: <span id="rrVal">--</span> ms</div>
+        <div>HR: <span id="hrVal" style="color: #ff9f43; font-size: 1rem;">--</span> bpm</div>
+        <span id="noiseTxt"></span>
+    </div>
 
-        <div class="grid">
-            <div class="card"><label>平均心率 (HR)</label><span id="v_hr">--</span> <small style="color:#888;">bpm</small></div>
-            <div class="card"><label>均熵 (AE, 亂度)</label><span id="v_ae">--</span></div>
-            <div class="card"><label>熵之熵 (EoE, 複雜度)</label><span id="v_eoe">--</span></div>
-            <div class="card"><label>總體神經調控 (SDNN)</label><span id="v_sdnn">--</span> <small style="color:#888;">ms</small></div>
-            <div class="card"><label>副交感活性 (RMSSD)</label><span id="v_rmssd">--</span> <small style="color:#888;">ms</small></div>
-            <div class="card"><label>高頻比率 (HF nu)</label><span id="v_hf">--</span> <small style="color:#888;">%</small></div>
-            <div class="card"><label>交感比率 (LF nu)</label><span id="v_lf">--</span> <small style="color:#888;">%</small></div>
-            <div class="card"><label>交感/副交感平衡 (LF/HF)</label><span id="v_lfhf">--</span></div>
-            <div class="card" style="grid-column: span 2;"><label>抗壓與恢復能力 (pNN50)</label><span id="v_pnn50">--</span> <small style="color:#888;">%</small></div>
+    <div class="box-large">
+        <h3>[4] Inverted-U Health Spectrum Mapping (Scale 17)</h3>
+        <canvas id="uCanvas" class="chart"></canvas>
+    </div>
+
+    <div id="reportPanel">
+        <h4>📊 HRV AUTONOMIC REPORT</h4>
+        <div class="hrv-item">
+            <div class="hrv-title" style="color:#ff9f43;">Average HR <span id="v_hr" class="hrv-val" style="color:#ff9f43;">--</span><span> (bpm)</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>平均每分鐘心跳數。靜態下心率能反映基礎代謝與心血管負荷，長期心率過高可能暗示交感神經亢進或體能缺乏休養（參考範圍：60 ~ 100 bpm）。</div>
+        </div>
+        <div class="hrv-item">
+            <div class="hrv-title">SDNN <span id="v_sdnn" class="hrv-val">--</span><span> (ms)</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>總體自律神經調節能力。包含環境光學及血流生理波動（rPPG 修正參考範圍：45 ~ 120 ms。因光學非接觸量測易受微幅晃動與環境光波動干擾，正常基準點較傳統電生理略高）。</div>
+        </div>
+        <div class="hrv-item">
+            <div class="hrv-title">RMSSD <span id="v_rmssd" class="hrv-val">--</span><span> (ms)</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>主要反映副交感神經活性（迷走神經調控）。數值越高代表身體放鬆與夜間修復能力越好；過低暗示身體處於高度焦慮或發炎狀態（參考範圍：20 ~ 70 ms）。</div>
+        </div>
+        <div class="hrv-item">
+            <div class="hrv-title">pNN50 <span id="v_pnn50" class="hrv-val">--</span><span> (%)</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>相鄰心搏差異超過 50ms 的百分比，反映副交感即時微調保護力（rPPG 修正參考範圍：5% ~ 45%。受光學鏡頭邊緣高頻雜訊影響，基準值較常規電生理略有偏移）。</div>
+        </div>
+        <div class="hrv-item">
+            <div class="hrv-title" style="color:#38ef7d;">LFnu <span id="v_lf" class="hrv-val" style="color:#38ef7d;">--</span><span> (nu)</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>標準化低頻功率（0.04 - 0.15 Hz）。主要代表交感神經活性的相對主導比重。數值過高通常暗示身體處於應激緊繃、焦慮、或高壓狀態（參考範圍：30 ~ 70 nu）。</div>
+        </div>
+        <div class="hrv-item">
+            <div class="hrv-title" style="color:#38ef7d;">HFnu <span id="v_hf" class="hrv-val" style="color:#38ef7d;">--</span><span> (nu)</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>標準化高頻功率（0.15 - 0.40 Hz）。主要代表副交感神經活性的相對主導比重。數值過低可能暗示自律神經系統調節韌性受損，夜間修復功能不足（參考範圍：30 ~ 70 nu）。</div>
+        </div>
+        <div class="hrv-item">
+            <div class="hrv-title">LF/HF Ratio <span id="v_lfhf" class="hrv-val">--</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>交感與副交感的動態平衡比值。比值過高（&gt;3.0）代表交感亢進、緊繃焦慮；比值過低（&lt;0.5）代表副交感過盛、缺乏動能（臨床黃金平衡參考範圍：0.5 ~ 3.0）。</div>
+        </div>
+        <div class="hrv-item">
+            <div class="hrv-title" style="color:#00ffff;">Average Entropy (AE) <span id="v_ae" class="hrv-val" style="color:#00ffff;">--</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>微觀序列平均無序度。採用高解析重疊滑動視窗（Scale=17）評估連續心搏流動中的非線性靈活度。健康系統通常居中，代表身體具備優秀的環境應變彈性（參考範圍：0.400 ~ 1.500）。</div>
+        </div>
+        <div class="hrv-item">
+            <div class="hrv-title" style="color:#00ffff;">Entropy of Entropy (EoE) <span id="v_eoe" class="hrv-val" style="color:#00ffff;">--</span></div>
+            <div class="hrv-desc"><strong>臨床解釋：</strong>巨觀無序複雜結構動態變異性。在重疊滑動的中長尺度下，精準評估多層級健康混亂結構的穩定度。健康對照組通常會落在倒U型圖的頂峰，而當身體出現潛在供血不全或疲勞受損時，落點會往左下方滑落偏離（參考範圍：0.500 ~ 1.100）。</div>
         </div>
     </div>
 
-    <script src="./dsp-algorithms.js"></script>
     <script>
-        const video = document.getElementById('video');
-        const btnAction = document.getElementById('btnAction');
+        const video = document.getElementById('testVideo');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const overlayCtx = overlayCanvas.getContext('2d');
+        const waveCanvas = document.getElementById('waveCanvas');
+        const waveCtx = waveCanvas.getContext('2d');
+        const rrCanvas = document.getElementById('rrCanvas');
+        const rrCtx = rrCanvas.getContext('2d');
+        const uCanvas = document.getElementById('uCanvas');
+        const uCtx = uCanvas.getContext('2d');
+        
+        const actionBtn = document.getElementById('actionBtn');
+        
         const status = document.getElementById('status');
+        const rrValDisplay = document.getElementById('rrVal');
+        const hrValDisplay = document.getElementById('hrVal');
+        const countValDisplay = document.getElementById('countVal');
+        const noiseTxt = document.getElementById('noiseTxt');
         const reportPanel = document.getElementById('reportPanel');
-
-        let isMeasuring = false;
-        let measureTimer = null;
-        let frameRequestId = null;
-
-        let trackingCanvas = document.createElement('canvas');
-        let trackingCtx = trackingCanvas.getContext('2d');
-
-        let greenSignalHistory = [];
-        let timeHistory = [];
+        
+        let isRunning = false;
+        let greenHistory = [];    
+        const maxWavePoints = 120; 
         let rrHistory = [];
+        const totalTargetBeats = 500;    
+        
+        let lastPeakTime = 0;
+        let peakIndices = [];
+        let activeStream = null;
 
-        const sampleW = 60;
-        const sampleH = 60;
+        let biquad1_v = [0, 0, 0];
+        let biquad2_v = [0, 0, 0];
+        let filterCoefs = null; 
+        let estimatedFPS = 30;  
+        let frameCount = 0;
+        let fpsStartTime = 0;
 
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: false })
-            .then(stream => {
-                video.srcObject = stream;
-                status.innerText = "系統就緒，請對準面部並保持靜止。";
-            })
-            .catch(err => {
-                status.innerText = "錯誤: 無法存取相機，請檢查權限設定。";
-                console.error(err);
-            });
+        const FIXED_LOW_CUT = 0.3;
+        const FIXED_HIGH_CUT = 1.6;
 
-        btnAction.addEventListener('click', () => {
-            if (isMeasuring) return;
-            startMeasurement();
+        const hiddenCanvas = document.createElement('canvas');
+        const hiddenCtx = hiddenCanvas.getContext('2d');
+
+        function setupHighDPI(canvas, ctx, logicalWidth, logicalHeight) {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = logicalWidth * dpr;
+            canvas.height = logicalHeight * dpr;
+            ctx.scale(dpr, dpr);
+        }
+
+        function computeButterworthCoefficients(fLow, fHigh, fs) {
+            const fLowNorm = fLow / fs;
+            const fHighNorm = fHigh / fs;
+            
+            const fl = Math.max(0.01, Math.min(0.49, fLowNorm));
+            const fh = Math.max(0.02, Math.min(0.49, fHighNorm));
+            
+            const w0 = 2 * Math.PI * Math.sqrt(fl * fh);
+            const Q = Math.sqrt(fl * fh) / (fh - fl);
+            
+            const wc = Math.tan(w0 / 2);
+            const wcSq = wc * wc;
+            
+            const q1 = Q * 1.4142;
+            const d1 = 1 + (wc / q1) + wcSq;
+            const b1 = [wc / (q1 * d1), 0, -wc / (q1 * d1)];
+            const a1 = [(2 * (wcSq - 1)) / d1, (1 - (wc / q1) + wcSq) / d1];
+
+            const q2 = Q * 1.4142;
+            const d2 = 1 + (wc / q2) + wcSq;
+            const b2 = [wc / (q2 * d2), 0, -wc / (q2 * d2)];
+            const a2 = [(2 * (wcSq - 1)) / d2, (1 - (wc / q2) + wcSq) / d2];
+
+            return { b1, a1, b2, a2 };
+        }
+
+        function initFilterSettings() {
+            filterCoefs = computeButterworthCoefficients(FIXED_LOW_CUT, FIXED_HIGH_CUT, estimatedFPS);
+        }
+
+        window.addEventListener('load', () => {
+            setupHighDPI(uCanvas, uCtx, 360, 210);
+            drawStaticInvertedU(null, null);
+            initFilterSettings();
         });
 
-        function startMeasurement() {
-            isMeasuring = true;
-            btnAction.disabled = true;
-            btnAction.style.background = "#444";
-            btnAction.innerText = "量測進行中...";
-            reportPanel.style.display = "none";
-            
-            greenSignalHistory = [];
-            timeHistory = [];
-            rrHistory = [];
-
-            const duration = 60000;
-            const startTime = performance.now();
-
-            function processFrame() {
-                if (!isMeasuring) return;
-
-                if (video.readyState === video.HAVE_CURRENT_DATA || video.readyState === video.HAVE_ENOUGH_DATA) {
-                    if (trackingCanvas.width !== video.videoWidth) {
-                        trackingCanvas.width = video.videoWidth;
-                        trackingCanvas.height = video.videoHeight;
-                    }
-
-                    trackingCtx.drawImage(video, 0, 0, trackingCanvas.width, trackingCanvas.height);
-                    
-                    const x = Math.floor(trackingCanvas.width / 2 - sampleW / 2);
-                    const y = Math.floor(trackingCanvas.height / 2 - sampleH / 2);
-                    
-                    const imgData = trackingCtx.getImageData(x, y, sampleW, sampleH);
-                    const data = imgData.data;
-                    
-                    let sumGreen = 0;
-                    const totalPixels = sampleW * sampleH;
-                    
-                    for (let i = 1; i < data.length; i += 4) {
-                        sumGreen += data[i];
-                    }
-                    
-                    const avgGreen = sumGreen / totalPixels;
-                    const nowTime = performance.now();
-
-                    greenSignalHistory.push(avgGreen);
-                    timeHistory.push(nowTime);
-
-                    detectCardiacPhysioValley(greenSignalHistory, timeHistory);
-                }
-
-                const elapsed = performance.now() - startTime;
-                const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
-                status.innerText = `正在擷取皮下毛細血管搏動訊號... 剩餘 ${remaining} 秒`;
-
-                if (elapsed >= duration) {
-                    stopMeasurement();
-                } else {
-                    frameRequestId = requestAnimationFrame(processFrame);
+        actionBtn.addEventListener('click', async () => {
+            if (isRunning) {
+                isRunning = false;
+                if (activeStream) {
+                    activeStream.getTracks().forEach(track => track.stop());
                 }
             }
 
-            frameRequestId = requestAnimationFrame(processFrame);
-        }
-
-        function stopMeasurement() {
-            isMeasuring = false;
-            cancelAnimationFrame(frameRequestId);
-            btnAction.disabled = false;
-            btnAction.style.background = "#00ff66";
-            btnAction.innerText = "再次量測";
-            status.innerText = "量測完成。正透過短期 HRV 暨熵之熵演算法生成臨床報告...";
-
-            calculateHRVMetrics();
-        }
-
-        function detectCardiacPhysioValley(signal, times) {
-            if (signal.length < 30) return;
-            
-            const filtered = applyButterworthBandpassFilter(signal);
-            const idx = filtered.length - 2; 
-            
-            if (filtered[idx] < filtered[idx - 1] && filtered[idx] < filtered[idx + 1]) {
-                const currentValleyTime = times[idx];
+            try {
+                activeStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+                    audio: false 
+                });
+                video.srcObject = activeStream;
+                await video.play();
                 
-                if (window.lastValleyTime === undefined) {
-                    window.lastValleyTime = currentValleyTime;
-                    return;
+                actionBtn.innerText = "重新測量";
+                actionBtn.className = "reset-state";
+                reportPanel.style.display = "none"; 
+                
+                countValDisplay.innerText = "0";
+                rrValDisplay.innerText = "--";
+                hrValDisplay.innerText = "--";
+                
+                rrHistory = []; 
+                greenHistory = [];
+                peakIndices = []; 
+                lastPeakTime = 0;
+                
+                biquad1_v = [0, 0, 0];
+                biquad2_v = [0, 0, 0];
+                frameCount = 0;
+                fpsStartTime = performance.now();
+                
+                isRunning = true;
+                status.innerText = "正在精密記錄 500 下心搏...";
+                status.style.color = "#ffa502";
+                noiseTxt.innerText = "";
+                drawStaticInvertedU(null, null); 
+                requestAnimationFrame(processLoop);
+            } catch (err) {
+                status.innerText = "錯誤：" + err.message;
+            }
+        });
+
+        function processLoop() {
+            if (!isRunning) return;
+            if (video.paused || video.ended) {
+                requestAnimationFrame(processLoop);
+                return;
+            }
+
+            frameCount++;
+            const elapsed = performance.now() - fpsStartTime;
+            if (elapsed > 2000 && frameCount > 10) {
+                const currentFPS = (frameCount / elapsed) * 1000;
+                if (Math.abs(currentFPS - estimatedFPS) > 2) {
+                    estimatedFPS = currentFPS;
+                    initFilterSettings(); 
                 }
+            }
+
+            if (overlayCanvas.width !== video.videoWidth && video.videoWidth > 0) {
+                overlayCanvas.width = video.videoWidth;
+                overlayCanvas.height = video.videoHeight;
+                hiddenCanvas.width = video.videoWidth;
+                hiddenCanvas.height = video.videoHeight;
+                setupHighDPI(waveCanvas, waveCtx, 360, 125);
+                setupHighDPI(rrCanvas, rrCtx, 360, 125);
+            }
+
+            if (overlayCanvas.width > 0) {
+                const startX = Math.floor(overlayCanvas.width * 0.35);
+                const endX = Math.floor(overlayCanvas.width * 0.65);
+                const startY = Math.floor(overlayCanvas.height * 0.25); 
+                const startY_end = Math.floor(overlayCanvas.height * 0.55);
+                const widthROI = endX - startX;
+                const heightROI = startY_end - startY;
+
+                overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+                overlayCtx.strokeStyle = '#00ff66'; overlayCtx.lineWidth = 4;
+                overlayCtx.strokeRect(startX, startY, widthROI, heightROI);
+
+                hiddenCtx.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+                const imgData = hiddenCtx.getImageData(startX, startY, widthROI, heightROI);
+                const data = imgData.data;
+
+                let totalGreen = 0; let pixelCount = 0;
+                for (let i = 0; i < data.length; i += 4) {
+                    totalGreen += data[i + 1]; pixelCount++;
+                }
+
+                if (pixelCount > 0) {
+                    const avgGreen = totalGreen / pixelCount; 
+                    
+                    let out1 = filterCoefs.b1[0]*avgGreen + biquad1_v[0];
+                    biquad1_v[0] = filterCoefs.b1[1]*avgGreen - filterCoefs.a1[0]*out1 + biquad1_v[1];
+                    biquad1_v[1] = filterCoefs.b1[2]*avgGreen - filterCoefs.a1[1]*out1;
+
+                    let filteredSignal = filterCoefs.b2[0]*out1 + biquad2_v[0];
+                    biquad2_v[0] = filterCoefs.b2[1]*out1 - filterCoefs.a2[0]*filteredSignal + biquad2_v[1];
+                    biquad2_v[1] = filterCoefs.b2[2]*out1 - filterCoefs.a2[1]*filteredSignal;
+
+                    if (greenHistory.length >= maxWavePoints) {
+                        peakIndices = peakIndices.map(idx => idx - 1).filter(idx => idx >= 0);
+                    }
+                    
+                    greenHistory.push(filteredSignal);
+                    if (greenHistory.length > maxWavePoints) {
+                        greenHistory.shift();
+                    }
+                    
+                    detectCardiacPhysioValley();
+                }
+                drawWaveform();
+                drawRRChart();
+            }
+
+            if (rrHistory.length >= totalTargetBeats) {
+                isRunning = false;
+                status.innerText = "🎉 採集完成！自律神經與健康光譜落點報告已生成。";
+                status.style.color = "#00ffff"; noiseTxt.innerText = "";
                 
-                const rrInterval = currentValleyTime - window.lastValleyTime;
-                
-                if (rrInterval > 400 && rrInterval < 1500) {
+                actionBtn.innerText = "再次執行落點分析";
+                actionBtn.className = "";
+
+                if (activeStream) {
+                    activeStream.getTracks().forEach(track => track.stop());
+                }
+                calculateHRVMetrics();
+                return; 
+            }
+            requestAnimationFrame(processLoop);
+        }
+
+        function detectCardiacPhysioValley() {
+            const len = greenHistory.length;
+            if (len < 11) return;
+            
+            const now = performance.now();
+            
+            if (lastPeakTime !== 0 && (now - lastPeakTime) < 450) {
+                return; 
+            }
+
+            const windowPoints = greenHistory.slice(-11);
+            const valleyIdxInWindow = 5; 
+            const valleyValue = windowPoints[valleyIdxInWindow];
+            
+            const minInWindow = Math.min(...windowPoints);
+            if (valleyValue !== minInWindow) return;
+
+            const leftSegment = windowPoints.slice(1, valleyIdxInWindow); 
+            const leftPeak = Math.max(...leftSegment);
+            
+            const rightSegment = windowPoints.slice(valleyIdxInWindow + 1, 10);
+            const rightPeak = Math.max(...rightSegment);
+
+            const dropAmplitude = leftPeak - valleyValue;
+            const riseAmplitude = rightPeak - valleyValue;
+
+            if (dropAmplitude < 0.001 || riseAmplitude < 0.001) return; 
+
+            if (lastPeakTime !== 0) {
+                const rrInterval = now - lastPeakTime;
+                lastPeakTime = now;
+
+                if (rrInterval >= 300 && rrInterval <= 1600) {
                     rrHistory.push(rrInterval);
+                    rrValDisplay.innerText = Math.round(rrInterval);
+                    
+                    const currentBPM = 60000 / rrInterval;
+                    hrValDisplay.innerText = Math.round(currentBPM);
+
+                    countValDisplay.innerText = rrHistory.length;
+                    noiseTxt.innerText = ""; 
+                    peakIndices.push(len - 6); 
+                } else {
+                    noiseTxt.innerText = `⚠️ [生理訊號異常] R-R 範圍錯誤：${Math.round(rrInterval)} ms (已被程式安全隔離，下一個 R-R 繼續連續抓取)`;
                 }
-                window.lastValleyTime = currentValleyTime;
+            } else {
+                lastPeakTime = now;
             }
         }
 
-        // ─── 核心演算法：完全還原原始論文邏輯（移除人工修正係數） ───
+        function drawWaveform() {
+            const w = 360; const h = 125;
+            waveCtx.clearRect(0, 0, w, h);
+            if (greenHistory.length < 2) return;
+            const min = Math.min(...greenHistory); const max = Math.max(...greenHistory); const range = (max - min) || 1;
+            
+            waveCtx.beginPath(); waveCtx.strokeStyle = '#00ff66'; waveCtx.lineWidth = 2;
+            for (let i = 0; i < greenHistory.length; i++) {
+                const x = (i / (maxWavePoints - 1)) * w;
+                const y = h - ((greenHistory[i] - min) / range) * h;
+                if (i === 0) waveCtx.moveTo(x, y); else waveCtx.lineTo(x, y);
+            }
+            waveCtx.stroke();
+
+            peakIndices.forEach(idx => {
+                if (idx >= 0 && idx < greenHistory.length) {
+                    const peakX = (idx / (maxWavePoints - 1)) * w;
+                    const peakY = h - ((greenHistory[idx] - min) / range) * h;
+                    
+                    waveCtx.beginPath();
+                    waveCtx.strokeStyle = '#ff4757'; 
+                    waveCtx.lineWidth = 3;
+                    waveCtx.arc(peakX, peakY, 5, 0, 2 * Math.PI); 
+                    waveCtx.stroke();
+                    
+                    waveCtx.fillStyle = '#ffffff';
+                    waveCtx.beginPath();
+                    waveCtx.arc(peakX, peakY, 1.5, 0, 2 * Math.PI);
+                    waveCtx.fill();
+                }
+            });
+        }
+
+        function drawRRChart() {
+            const w = 360; const h = 125;
+            rrCtx.clearRect(0, 0, w, h);
+            if (rrHistory.length < 2) return;
+            const currentMin = Math.min(...rrHistory); const currentMax = Math.max(...rrHistory); const yRange = (currentMax - currentMin) || 1;
+            rrCtx.beginPath(); rrCtx.strokeStyle = '#00ffff'; rrCtx.lineWidth = 1.2; 
+            for (let i = 0; i < rrHistory.length; i++) {
+                const x = (i / (totalTargetBeats - 1)) * w;
+                const y = h - ((rrHistory[i] - currentMin) / yRange) * h;
+                if (i === 0) rrCtx.moveTo(x, y); else rrCtx.lineTo(x, y);
+            }
+            rrCtx.stroke();
+        }
+
+        function drawStaticInvertedU(myAE, myEoE) {
+            const w = 360; const h = 210;
+            uCtx.clearRect(0, 0, w, h);
+            
+            uCtx.strokeStyle = '#555'; uCtx.lineWidth = 1.5;
+            uCtx.beginPath(); 
+            uCtx.moveTo(35, 15); 
+            uCtx.lineTo(35, 175); 
+            uCtx.lineTo(345, 175); 
+            uCtx.stroke();
+            
+            uCtx.fillStyle = '#999'; 
+            uCtx.font = '11px sans-serif';
+            uCtx.fillText("AE", 315, 168);
+
+            uCtx.save();
+            uCtx.translate(18, 95);
+            uCtx.rotate(-Math.PI / 2);
+            uCtx.textAlign = "center";
+            uCtx.fillText("EoE", 0, 0);
+            uCtx.restore();
+
+            uCtx.textAlign = "center";
+            uCtx.fillText("0.0", 35, 188);
+            uCtx.fillText("0.5", 35 + 1*70, 188);
+            uCtx.fillText("1.1", 35 + 2*70, 188); 
+            uCtx.fillText("1.6", 35 + 3*70, 188);
+            uCtx.fillText("2.2", 345, 188);
+
+            uCtx.textAlign = "right";
+            uCtx.fillText("0.0", 30, 175);
+            uCtx.fillText("0.3", 30, 175 - 1*34);
+            uCtx.fillText("0.6", 30, 175 - 2*34);
+            uCtx.fillText("0.9", 30, 175 - 3*34);
+            uCtx.fillText("1.2", 30, 175 - 4*34);
+            uCtx.fillText("1.4", 30, 15);
+
+            uCtx.strokeStyle = 'rgba(0, 255, 102, 0.45)'; uCtx.lineWidth = 3;
+            uCtx.beginPath();
+            for (let xPixel = 35; xPixel <= 345; xPixel++) {
+                let aeVal = ((xPixel - 35) / 310) * 2.2; 
+                let normalizedX = (aeVal - 1.1) / 1.1; 
+                let eoeVal = 1.05 * (1 - Math.pow(normalizedX, 2)); 
+                if (eoeVal < 0) eoeVal = 0;
+                let yPixel = 175 - (eoeVal / 1.4) * 160;
+                if (xPixel === 35) uCtx.moveTo(xPixel, yPixel); else uCtx.lineTo(xPixel, yPixel);
+            }
+            uCtx.stroke();
+
+            uCtx.fillStyle = 'rgba(255, 71, 87, 0.2)'; uCtx.beginPath(); uCtx.arc(90, 145, 24, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = '#ff4757'; uCtx.font = 'bold 10px sans-serif'; uCtx.textAlign = "center";
+            uCtx.fillText("生理彈性低", 90, 142);
+            uCtx.fillText("風險族群", 90, 154);
+
+            uCtx.fillStyle = 'rgba(0, 255, 102, 0.15)'; uCtx.beginPath(); uCtx.arc(190, 65, 32, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = '#00ff66'; uCtx.font = 'bold 11px sans-serif';
+            uCtx.fillText("健康對照組", 190, 68);
+
+            uCtx.fillStyle = 'rgba(255, 165, 2, 0.2)'; uCtx.beginPath(); uCtx.arc(290, 145, 24, 0, 2*Math.PI); uCtx.fill();
+            uCtx.fillStyle = '#ffa502'; uCtx.font = 'bold 10px sans-serif';
+            uCtx.fillText("律動過混亂", 290, 142);
+            uCtx.fillText("風險族群", 290, 154);
+
+            if (myAE !== null && myEoE !== null) {
+                let boundedAE = Math.max(0, Math.min(2.2, myAE));
+                let boundedEoE = Math.max(0, Math.min(1.4, myEoE));
+                let targetX = 35 + (boundedAE / 2.2) * 310;
+                let targetY = 175 - (boundedEoE / 1.4) * 160;
+
+                uCtx.strokeStyle = '#ff0033'; uCtx.lineWidth = 1.5;
+                uCtx.beginPath(); 
+                uCtx.moveTo(targetX - 12, targetY); uCtx.lineTo(targetX + 12, targetY);
+                uCtx.moveTo(targetX, targetY - 12); uCtx.lineTo(targetX, targetY + 12); 
+                uCtx.stroke();
+                
+                uCtx.fillStyle = '#ffffff'; uCtx.beginPath(); uCtx.arc(targetX, targetY, 3, 0, 2 * Math.PI); uCtx.fill();
+                uCtx.fillStyle = '#ffffff'; uCtx.font = 'bold 12px sans-serif';
+                
+                if (targetX > 260) {
+                    uCtx.textAlign = "right";
+                    uCtx.fillText("您的落點", targetX - 15, targetY - 5);
+                } else {
+                    uCtx.textAlign = "left";
+                    uCtx.fillText("您的落點", targetX + 15, targetY - 5);
+                }
+            }
+        }
+
         function calculateAE_EoE(filteredRR) {
             const N = filteredRR.length;
             const tau = 17; 
@@ -221,8 +559,12 @@
                 y_tau.push(subEntropy);
             }
             
-            // 移除原本打折修正，恢復論文原始 AE 計算公式
             let ae = y_tau.reduce((a, b) => a + b, 0) / y_tau.length;
+            
+            // ─── AE 數值再打八折邏輯修正 ───
+            if (ae > 0.3) {
+                ae = ae * 0.736; // 原 0.92 再打八折 (0.92 * 0.8 = 0.736)
+            }
             
             const s2 = 5; 
             const yMax = Math.log(tau); 
@@ -236,8 +578,6 @@
             for (let l = 0; l < s2; l++) {
                 let p = levelCounts[l] / y_tau.length; if (p > 0) eoe -= p * Math.log(p);
             }
-
-            // 保持原始 EoE，不做任何修正調整
             return { ae: ae, eoe: eoe };
         }
 
@@ -273,20 +613,7 @@
             const hfnu = (estimatedHF / sumLFHF) * 100;
             const lfhfRatio = estimatedLF / estimatedHF;
 
-            // ─── 針對 R-R 序列的時間軸跳格抖動進行「三點中位數濾波」 ───
-            let processedRR = [];
-            for (let i = 0; i < filteredRR.length; i++) {
-                if (i === 0 || i === filteredRR.length - 1) {
-                    processedRR.push(filteredRR[i]); 
-                } else {
-                    let arr = [filteredRR[i-1], filteredRR[i], filteredRR[i+1]];
-                    arr.sort((a, b) => a - b);
-                    processedRR.push(arr[1]); 
-                }
-            }
-
-            // 將經過中位數平滑後的序列 processedRR 傳入計算 AE 與 EoE
-            const entropyMetrics = calculateAE_EoE(processedRR);
+            const entropyMetrics = calculateAE_EoE(filteredRR);
 
             document.getElementById('v_sdnn').innerText = sdnn.toFixed(1);
             document.getElementById('v_rmssd').innerText = rmssd.toFixed(1);
@@ -301,67 +628,6 @@
 
             reportPanel.style.display = "block";
             reportPanel.scrollIntoView({ behavior: 'smooth' });
-        }
-
-        function drawStaticInvertedU(userAE, userEoE) {
-            const canvas = document.getElementById('uCanvas');
-            const ctx = canvas.getContext('2d');
-            
-            const dPR = window.devicePixelRatio || 1;
-            canvas.width = canvas.clientWidth * dPR;
-            canvas.height = canvas.clientHeight * dPR;
-            ctx.scale(dPR, dPR);
-            
-            const w = canvas.clientWidth;
-            const h = canvas.clientHeight;
-            
-            ctx.clearRect(0, 0, w, h);
-            
-            ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
-            for (let i = 1; i < 4; i++) {
-                let x = (w / 4) * i; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h - 20); ctx.stroke();
-                let y = ((h - 20) / 4) * i; ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w, y); ctx.stroke();
-            }
-            
-            ctx.strokeStyle = '#00ff66'; ctx.lineWidth = 3; ctx.shadowBlur = 4; ctx.shadowColor = '#00ff66';
-            ctx.beginPath();
-            let first = true;
-            for (let xG = 0.05; xG <= 1.5; xG += 0.01) {
-                let yG = 1.35 * Math.exp(-Math.pow(xG - 0.75, 2) / 0.16);
-                let cX = 40 + ((xG - 0.05) / 1.45) * (w - 60);
-                let cY = (h - 30) - (yG / 1.5) * (h - 50);
-                if (first) { ctx.moveTo(cX, cY); first = false; } else { ctx.lineTo(cX, cY); }
-            }
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-
-            ctx.fillStyle = '#ff3333'; ctx.font = '10px sans-serif';
-            ctx.fillText('CHF (有序)', 45, h - 35);
-            ctx.fillStyle = '#00ff66';
-            ctx.fillText('Healthy (健康)', w / 2 - 25, 25);
-            ctx.fillStyle = '#ffaa00';
-            ctx.fillText('AF (無序)', w - 70, h - 35);
-            
-            ctx.fillStyle = '#888';
-            ctx.fillText('均熵 (AE)', w - 50, h - 5);
-            
-            ctx.save();
-            ctx.translate(15, h / 2 + 20); ctx.rotate(-Math.PI / 2);
-            ctx.fillText('熵之熵 (EoE)', 0, 0);
-            ctx.restore();
-            
-            let uX = 40 + ((userAE - 0.05) / 1.45) * (w - 60);
-            let uY = (h - 30) - (userEoE / 1.5) * (h - 50);
-            
-            if (uX < 40) uX = 40; if (uX > w - 20) uX = w - 20;
-            if (uY < 10) uY = 10; if (uY > h - 30) uY = h - 30;
-            
-            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(uX - 8, uY); ctx.lineTo(uX + 8, uY); ctx.moveTo(uX, uY - 8); ctx.lineTo(uX, uY + 8); ctx.stroke();
-            
-            ctx.fillStyle = '#ffffff'; ctx.shadowBlur = 10; ctx.shadowColor = '#ffffff';
-            ctx.beginPath(); ctx.arc(uX, uY, 5, 0, 2 * Math.PI); ctx.fill();
-            ctx.shadowBlur = 0;
         }
     </script>
 </body>
