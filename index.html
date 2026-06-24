@@ -78,12 +78,10 @@
         let trackingCanvas = document.createElement('canvas');
         let trackingCtx = trackingCanvas.getContext('2d');
 
-        // 生物邏輯時間序列容器
         let greenSignalHistory = [];
         let timeHistory = [];
         let rrHistory = [];
 
-        // 影像特徵提取邊界緩衝
         const sampleW = 60;
         const sampleH = 60;
 
@@ -113,7 +111,7 @@
             timeHistory = [];
             rrHistory = [];
 
-            const duration = 60000; // 臨床黃金 60 秒短期量測
+            const duration = 60000;
             const startTime = performance.now();
 
             function processFrame() {
@@ -127,7 +125,6 @@
 
                     trackingCtx.drawImage(video, 0, 0, trackingCanvas.width, trackingCanvas.height);
                     
-                    // 鎖定額頭/面頰核心光電容積區域 (ROI)
                     const x = Math.floor(trackingCanvas.width / 2 - sampleW / 2);
                     const y = Math.floor(trackingCanvas.height / 2 - sampleH / 2);
                     
@@ -147,7 +144,6 @@
                     greenSignalHistory.push(avgGreen);
                     timeHistory.push(nowTime);
 
-                    // 即時動態峰值捕捉與心搏間距提取邏輯
                     detectCardiacPhysioValley(greenSignalHistory, timeHistory);
                 }
 
@@ -179,11 +175,9 @@
         function detectCardiacPhysioValley(signal, times) {
             if (signal.length < 30) return;
             
-            // 呼叫演算法庫進行 0.3Hz - 1.6Hz 4階巴特沃斯濾波器處理
             const filtered = applyButterworthBandpassFilter(signal);
             const idx = filtered.length - 2; 
             
-            // 局部最小值判定 (PPG 波谷對應心臟收縮射血，即 ECG 上的 R 峰)
             if (filtered[idx] < filtered[idx - 1] && filtered[idx] < filtered[idx + 1]) {
                 const currentValleyTime = times[idx];
                 
@@ -194,7 +188,6 @@
                 
                 const rrInterval = currentValleyTime - window.lastValleyTime;
                 
-                // 生理防錯機制：排除小於 40ms 且大於 1500ms 的異常跳點
                 if (rrInterval > 400 && rrInterval < 1500) {
                     rrHistory.push(rrInterval);
                 }
@@ -202,7 +195,7 @@
             }
         }
 
-        // ─── 核心演算法：完全還原原始論文邏輯 ───
+        // ─── 核心演算法：完全還原原始論文邏輯（移除人工修正係數） ───
         function calculateAE_EoE(filteredRR) {
             const N = filteredRR.length;
             const tau = 17; 
@@ -228,7 +221,7 @@
                 y_tau.push(subEntropy);
             }
             
-            // ─── 原始 AE 計算：無任何縮放修正 ───
+            // 移除原本打折修正，恢復論文原始 AE 計算公式
             let ae = y_tau.reduce((a, b) => a + b, 0) / y_tau.length;
             
             const s2 = 5; 
@@ -244,7 +237,7 @@
                 let p = levelCounts[l] / y_tau.length; if (p > 0) eoe -= p * Math.log(p);
             }
 
-            // ─── 原始 EoE 計算：無任何縮放修正 ───
+            // 保持原始 EoE，不做任何修正調整
             return { ae: ae, eoe: eoe };
         }
 
@@ -280,20 +273,19 @@
             const hfnu = (estimatedHF / sumLFHF) * 100;
             const lfhfRatio = estimatedLF / estimatedHF;
 
-            // ─── 關鍵修正：針對 R-R 序列的時間抖動進行「三點中位數濾波」 ───
+            // ─── 針對 R-R 序列的時間軸跳格抖動進行「三點中位數濾波」 ───
             let processedRR = [];
             for (let i = 0; i < filteredRR.length; i++) {
                 if (i === 0 || i === filteredRR.length - 1) {
-                    processedRR.push(filteredRR[i]); // 首尾點直接保留
+                    processedRR.push(filteredRR[i]); 
                 } else {
-                    // 取 前一點、當前點、後一點 進行排序
                     let arr = [filteredRR[i-1], filteredRR[i], filteredRR[i+1]];
                     arr.sort((a, b) => a - b);
-                    processedRR.push(arr[1]); // 寫入排序後的中位數，消除 33.3ms 取樣抖動
+                    processedRR.push(arr[1]); 
                 }
             }
 
-            // 將平滑濾波後的真實心搏序列，送去計算 AE 與 EoE
+            // 將經過中位數平滑後的序列 processedRR 傳入計算 AE 與 EoE
             const entropyMetrics = calculateAE_EoE(processedRR);
 
             document.getElementById('v_sdnn').innerText = sdnn.toFixed(1);
@@ -305,14 +297,12 @@
             document.getElementById('v_ae').innerText = entropyMetrics.ae.toFixed(3);
             document.getElementById('v_eoe').innerText = entropyMetrics.eoe.toFixed(3);
 
-            // 繪製臨床倒 U 字型落點曲線
             drawStaticInvertedU(entropyMetrics.ae, entropyMetrics.eoe);
 
             reportPanel.style.display = "block";
             reportPanel.scrollIntoView({ behavior: 'smooth' });
         }
 
-        // 繪製倒 U 字型曲線與患者臨床座標點位置
         function drawStaticInvertedU(userAE, userEoE) {
             const canvas = document.getElementById('uCanvas');
             const ctx = canvas.getContext('2d');
@@ -327,31 +317,24 @@
             
             ctx.clearRect(0, 0, w, h);
             
-            // 繪製背景參考座標網格
             ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
             for (let i = 1; i < 4; i++) {
                 let x = (w / 4) * i; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h - 20); ctx.stroke();
                 let y = ((h - 20) / 4) * i; ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w, y); ctx.stroke();
             }
             
-            // 繪製倒 U 型理論基準曲線
             ctx.strokeStyle = '#00ff66'; ctx.lineWidth = 3; ctx.shadowBlur = 4; ctx.shadowColor = '#00ff66';
             ctx.beginPath();
             let first = true;
             for (let xG = 0.05; xG <= 1.5; xG += 0.01) {
-                // 模擬倒 U 理論數學常態曲線
                 let yG = 1.35 * Math.exp(-Math.pow(xG - 0.75, 2) / 0.16);
-                
-                // 轉換至畫布像素座標系
                 let cX = 40 + ((xG - 0.05) / 1.45) * (w - 60);
                 let cY = (h - 30) - (yG / 1.5) * (h - 50);
-                
                 if (first) { ctx.moveTo(cX, cY); first = false; } else { ctx.lineTo(cX, cY); }
             }
             ctx.stroke();
-            ctx.shadowBlur = 0; // 重設光暈效應
+            ctx.shadowBlur = 0;
 
-            // 標註經典自律神經三大臨床區域
             ctx.fillStyle = '#ff3333'; ctx.font = '10px sans-serif';
             ctx.fillText('CHF (有序)', 45, h - 35);
             ctx.fillStyle = '#00ff66';
@@ -359,7 +342,6 @@
             ctx.fillStyle = '#ffaa00';
             ctx.fillText('AF (無序)', w - 70, h - 35);
             
-            // 軸線標籤
             ctx.fillStyle = '#888';
             ctx.fillText('均熵 (AE)', w - 50, h - 5);
             
@@ -368,15 +350,12 @@
             ctx.fillText('熵之熵 (EoE)', 0, 0);
             ctx.restore();
             
-            // 映射並標記受試者當前的量測落點
             let uX = 40 + ((userAE - 0.05) / 1.45) * (w - 60);
             let uY = (h - 30) - (userEoE / 1.5) * (h - 50);
             
-            // 防邊界溢出保護
             if (uX < 40) uX = 40; if (uX > w - 20) uX = w - 20;
             if (uY < 10) uY = 10; if (uY > h - 30) uY = h - 30;
             
-            // 繪製高亮十字標記與當前受試者粒子
             ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(uX - 8, uY); ctx.lineTo(uX + 8, uY); ctx.moveTo(uX, uY - 8); ctx.lineTo(uX, uY + 8); ctx.stroke();
             
